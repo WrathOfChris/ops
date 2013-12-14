@@ -71,15 +71,15 @@ if args.auto == True:
   for t in tags:
     if t.name == envtag:
       tagfilter['tag:%s' % envtag] = t.value
-      if verbose:
+      if args.verbose:
         print "Autodiscovery: env %s" % t.value
     elif t.name == svctag:
       tagfilter['tag:%s' % svctag] = t.value
-      if verbose:
+      if args.verbose:
         print "Autodiscovery: service %s" % t.value
     elif t.name == clutag:
       tagfilter['tag:%s' % clutag] = t.value
-      if verbose:
+      if args.verbose:
         print "Autodiscovery: cluster %s" % t.value
 
 # Command-line args replace autodiscovery
