@@ -25,6 +25,28 @@ a list of current running hosts.
 * **-c cluster** specify cluster selector
 * **-f file** output file.  If not specified, writes to _STDOUT_
 
+## AUTODISCOVERY
+Autodiscovery relies on an instance-profile role allowing the host to Describe
+instances and tags.  The below IAM statement allows the instance to describe
+any EC2 resource.
+
+```
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Action": [
+          "ec2:Describe*"
+        ],
+        "Resource": [
+          "*"
+        ],
+        "Effect": "Allow"
+      }
+    ]
+  }
+```
+
 ## EXAMPLES
 
 Autodiscover peer hosts of the same environ, service, cluster:
