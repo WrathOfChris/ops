@@ -186,7 +186,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 ## NETWORK
 Cloudcaster creates a VPC network as follows:
 ***
-![CloudCasterVPC](https://github.com/WrathOfChris/ops/blob/master/img/CloudCasterVPC.png?raw=1)
+![CloudCasterVPC](https://raw.github.com/WrathOfChris/ops/master/cloudcaster/img/CloudCasterVPC.png)
 * orange dashed boxes are regional Availability Zones (ie: us-west-2a, us-west-2b, us-west-2c)
 * **public subnets** are connected to the **public routing table** which has the Internet GateWay attached for external access, ElasticIP support, ELB support, et.
 * **private subnets** are connected to the **default routing table** which has the NAT/VPN instance attached for internal access, internet access via shared-address NAT, and VPN access.
