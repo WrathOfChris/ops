@@ -1,0 +1,76 @@
+{
+  "aws": {
+    "continent": "us1",
+    "provider": "ec2",
+    "region": "us-west-2",
+    "privnet": "10.0.0.0/8",
+    "svctag": "service",
+    "envtag": "env",
+    "env": "prod",
+    "zone": "example.wrathofchris.com."
+  },
+
+  "vpc": {
+    "cidr": "10.0.0.0/22",
+    "subnets": [ "10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24" ],
+    "pubsubnets": [ "10.0.3.0/26", "10.0.3.64/26", "10.0.3.128/26" ],
+    "azs": [ "us-west-2a", "us-west-2b", "us-west-2c" ]
+  },
+
+  "nat": {
+    "name": "nat-example",
+    "group": "nat-example",
+    "svctag": "nat",
+    "_comment": "Use amzn-ami-vpc-nat-pv-2013.09.0.x86_64-ebs for Ops VPC",
+    "ami": "ami-f032acc0",
+    "type": "t1.micro",
+    "keypair": "wrathofchris-201401",
+    "role": "discovery",
+    "psk": "If I only had a secret to share",
+    "ports": [
+      { "from": 500, "to": 500, "prot": "udp" },
+      { "from": 4500, "to": 4500, "prot": "udp" }
+    ]
+  },
+
+  "elbs": [
+    {
+      "name": "example",
+      "group": "example-elb-prod",
+      "ports": [
+        { "from": 80, "to": 80, "prot": "tcp" },
+        { "from": 443, "to": 443, "prot": "tcp" }
+      ],
+      "listeners": [
+        { "from": 80, "from_prot": "http", "to": 80, "to_prot": "http" },
+        { "from": 443, "from_prot": "https", "to": 443, "to_prot": "https", "cert": "wrathofchris-example-2014" }
+      ],
+      "interval": 20,
+      "healthy": 3,
+      "unhealthy": 5,
+      "target": "HTTP:80/"
+    }
+  ],
+
+  "apps": [
+    {
+      "name": "exampleapp",
+      "svctag": "example",
+      "cluster": "blue",
+      "group": "example-prod",
+      "elb": "example",
+      "ami": "ami-ccf297fc",
+      "type": "t1.micro",
+      "role": "discovery",
+      "keypair": "wrathofchris-201401",
+      "count": 1,
+      "ports": [
+        { "from": 22, "to": 22, "prot": "tcp" }
+      ],
+      "autoscale": {
+        "min": 0,
+        "max": 1
+      }
+    }
+  ]
+}
