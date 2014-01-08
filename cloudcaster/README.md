@@ -130,6 +130,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 
 * **elbs[].name** - global name of the ELB.  This could conflict with ANY other ELB in the account.  Be smart, use environment names.
 * **elbs[].group** - security group name for the ELB hosts.  VPC ELBs now belong to a normal security group, and can be restricted to IP-based ACL.  At present, cloudcaster by default uses 0.0.0.0/0 but may be extended in future to restrict this.
+* **elbs[].internal** - make this ELB and _internal_ ELB for within the VPC only.
 * **elbs[].ports[]** - list of public ports to authorize external access to.  Listeners are not automatically authorized.
 * **elbs[].allow[]** - list of security groups to allow access to the ELB.  For internal groups when public ports are not authorized.
 * **elbs[].listeners[]** - set up ELB listener based on { from, from_prot, to, to_prot, cert }.  From is the inbound listener.  To is the outbound connection to private hosts.  For SOA, use standard web 80/443 externally and redirect to erlang service ports internally.  Cert is matched based on the name of the cert registered in IAM.  Protocols are standard ELB: HTTP, HTTPS, TCP, SSL.
