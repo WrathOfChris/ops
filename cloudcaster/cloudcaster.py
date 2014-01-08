@@ -543,9 +543,13 @@ for confelb in conf['elbs']:
       unhealthy_threshold = confelb['unhealthy'],
       target = confelb['target']
     )
+    elb_scheme = 'internet-facing'
+    if 'internal' in confelb:
+      elb_scheme = 'internal'
     elb = awselb.create_load_balancer(myname, None,
       complex_listeners = elb_listeners_full,
       subnets = vpc_pubsubnetids,
+      scheme = elb_scheme,
       security_groups = str(elb_sg.id)
     )
     if elb == None:
