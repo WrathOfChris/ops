@@ -731,6 +731,19 @@ def find_launch(name, ascs):
       return c
   return None
 
+def really_get_all_launch_configurations():
+  res = []
+  lcs = awsasg.get_all_launch_configurations()
+  for l in lcs:
+    res.append(l)
+
+  while lcs.next_token != None:
+    lcs = awsasg.get_all_launch_configurations(next_token=lcs.next_token)
+    for l in lcs:
+      res.append(l)
+
+  return res
+
 now = datetime.datetime.utcnow()
 nowstr = now.strftime("%Y%m%d%H%M%S")
 
@@ -739,7 +752,7 @@ for app in conf['apps']:
     sg = find_sg(app['group'], sgs)
     asgname = "%s-%s" % (app['name'], conf['aws']['env'])
     asgnamefull = "%s-%s" % (asgname, nowstr)
-    asconfigs = sorted(awsasg.get_all_launch_configurations(), key=lambda a: a.name, reverse=True)
+    asconfigs = sorted(really_get_all_launch_configurations(), key=lambda a: a.name, reverse=True)
     lc = find_launch(asgname, asconfigs)
     if lc != None and 'ami' in app and lc.image_id != app['ami']:
       print "APP-LAUNCH %s ami %s != %s" % (lc.name, lc.image_id, app['ami'])
