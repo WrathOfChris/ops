@@ -566,6 +566,10 @@ for confelb in conf['elbs']:
     for l in elb.listeners:
       print "ELB-LISTEN %s %s/%s -> %s/%s" % (elb.name, l[0], l[2], l[1], l[4])
 
+  if elb != None and elb.is_cross_zone_load_balancing() != True:
+    print "ELB %s enabling cross-zone load balancing" % (elb.name)
+    elb.enable_cross_zone_load_balancing()
+
   #
   # ELB Listeners
   #
