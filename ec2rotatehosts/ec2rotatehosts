@@ -1,0 +1,188 @@
+#!/usr/bin/python
+#
+# Copyright (c) 2014 Chris Maxwell <chris@wrathofchris.com>
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Thanks to Mahesh Paolini-Subramanya (@dieswaytoofast) for his help
+#
+
+import argparse
+import boto
+import boto.ec2
+import boto.ec2.autoscale
+import boto.ec2.elb
+import os
+import sys
+import time
+from pprint import pprint
+
+if 'AWS_ACCESS_KEY' in os.environ:
+  aws_key = os.environ['AWS_ACCESS_KEY']
+else:
+  aws_key = None
+if 'AWS_SECRET_KEY' in os.environ:
+  aws_secret = os.environ['AWS_SECRET_KEY']
+else:
+  aws_secret = None
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
+parser.add_argument("-r", "--region", help="ec2 region")
+parser.add_argument("-c", "--count", help="concurrent rotations", default=1)
+parser.add_argument("-s", "--sleep", help="wait sleep", default=5)
+parser.add_argument("group", help="autoscale group to rotoate")
+args = parser.parse_args()
+if args.group == None:
+  parser.print_help()
+  sys.exit(1)
+
+if args.region == None:
+  args.region = 'us-east-1'
+
+verbose = args.verbose
+awselb = boto.ec2.elb.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
+awsasg = boto.ec2.autoscale.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
+
+oldinst = []
+newinst = []
+azcount = {}
+
+if verbose:
+  print "%s rotating autoscale group in %s with count %i" % (args.group, args.region, args.count)
+
+asg = awsasg.get_all_groups([args.group])[0]
+
+if verbose:
+  print "%s rotating %i instances" % (args.group, len(asg.instances))
+
+# start count of AZ instances
+for az in asg.availability_zones:
+  azcount[str(az)] = 0
+
+for i in asg.instances:
+  oldinst.append(i.instance_id)
+  azcount[str(i.availability_zone)] += 1
+
+# check for reduced redundancy in each zone, warn if AZ will empty
+for azname, count in azcount.items():
+  if count <= args.count:
+    print "WARNING: rotation will temporarily reduce redundancy in zone %s" % azname
+
+lbs = awselb.get_all_load_balancers(asg.load_balancers)
+
+# check cross-zone load balancing - warn if empty AZ will deadend requests
+for lb in lbs:
+  if lb.is_cross_zone_load_balancing() != True:
+    for azname, count in azcount.items():
+      if count <= 1:
+        print "WARNING: rotation will cause user-facing outages in zone %s" % azname
+
+for thisinst in oldinst:
+  thisnewinst = None
+
+  if not verbose:
+    # first part of rotating i-xxxxxx -> i-xxxxxx
+    print "%s rotating %s ->" % (args.group, thisinst),
+
+  # remove instance from ELB
+  elbsleep = 0
+  for lb in lbs:
+    if verbose:
+      print "%s %s removing from ELB %s" % (asg.name, thisinst, lb.name)
+    awselb.deregister_instances(lb.name, thisinst)
+    elbsleep = max(elbsleep, lb.health_check.interval * lb.health_check.healthy_threshold)
+  if verbose:
+    print "%s %s waiting %d seconds for ELB deregistration" % (args.group, thisinst, elbsleep)
+  time.sleep(elbsleep)
+
+  # remove instance from ASG
+  if verbose:
+    print "%s %s autoscale terminating" % (args.group, thisinst)
+  awsasg.terminate_instance(thisinst, decrement_capacity=False)
+
+  # wait for ASG to start new instance
+  if verbose:
+    print "%s waiting for autoscale instance" % args.group
+  healthy = False
+  while healthy == False:
+    healthycnt = 0
+    asg = awsasg.get_all_groups([args.group])[0]
+    for i in asg.instances:
+      if i.lifecycle_state == u'InService':
+        healthycnt += 1
+      if i.instance_id not in oldinst and i.instance_id not in newinst:
+        newinst.append(i.instance_id)
+        thisnewinst = i.instance_id
+        if verbose:
+          print "%s %s is %s" % (args.group, i.instance_id, str(i.lifecycle_state))
+        else:
+          # second part of rotating i-xxxxxx -> i-xxxxxx
+          print "%s" % i.instance_id
+    if healthycnt >= asg.desired_capacity:
+      healthy = True
+
+    # sleep a few
+    if healthy != True:
+      time.sleep(args.sleep)
+
+  # wait for instance health to be InService
+  if verbose:
+    print "%s %s waiting for ELB registration" % (args.group, thisnewinst)
+  healthy = False
+  while healthy == False:
+    healthycnt = 0
+    lbs = awselb.get_all_load_balancers(asg.load_balancers)
+    for lb in lbs:
+      healths = awselb.describe_instance_health(lb.name, [thisnewinst])
+      for h in healths:
+        if h.state == u'InService':
+          healthycnt += 1
+    if healthycnt == len(lbs):
+      healthy = True
+
+    # sleep a few
+    if healthy != True:
+      time.sleep(args.sleep)
+
+  # wait for all instances to be healthy, just in case
+  if verbose:
+    print "%s verifying all ELB instances healthy" % asg.name
+  healthy = False
+  while healthy == False:
+    healthycnt = 0
+    healthyneed = 0
+    lbs = awselb.get_all_load_balancers(asg.load_balancers)
+    for lb in lbs:
+      healths = awselb.describe_instance_health(lb.name)
+      healthyneed += len(healths)
+      for h in healths:
+        if h.state == u'InService':
+          healthycnt += 1
+    if healthycnt == healthyneed:
+      healthy = True
+
+    # sleep a few
+    if healthy != True:
+      time.sleep(args.sleep)
