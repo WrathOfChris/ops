@@ -87,8 +87,11 @@ for i in asg.instances:
 
 # check for reduced redundancy in each zone, warn if AZ will empty
 for azname, count in azcount.items():
-  if count <= args.count:
+  if count > 0 and count <= args.count:
     print "WARNING: rotation will temporarily reduce redundancy in zone %s" % azname
+
+if len(oldinst) < 2:
+  print "WARNING: single autoscale instance, using accelerated rotation"
 
 lbs = awselb.get_all_load_balancers(asg.load_balancers)
 
@@ -96,7 +99,7 @@ lbs = awselb.get_all_load_balancers(asg.load_balancers)
 for lb in lbs:
   if lb.is_cross_zone_load_balancing() != True:
     for azname, count in azcount.items():
-      if count <= 1:
+      if count > 0 and count <= 1:
         print "WARNING: rotation will cause user-facing outages in zone %s" % azname
 
 for thisinst in oldinst:
@@ -115,7 +118,9 @@ for thisinst in oldinst:
     elbsleep = max(elbsleep, lb.health_check.interval * lb.health_check.healthy_threshold)
   if verbose:
     print "%s %s waiting %d seconds for ELB deregistration" % (args.group, thisinst, elbsleep)
-  time.sleep(elbsleep)
+  # only sleep if this is a controlled rotation
+  if len(oldinst) > 1:
+    time.sleep(elbsleep)
 
   # remove instance from ASG
   if verbose:
