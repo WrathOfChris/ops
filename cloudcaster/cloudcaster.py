@@ -706,7 +706,7 @@ for app in conf['apps']:
 
     if (len(instances) > 0):
       tags = {
-        "Name": "%s-%s" % (conf['aws']['name'], app['env']),
+        "Name": "%s-%s" % (app['name'], conf['aws']['env']),
         conf['aws']['svctag']: app['svctag'],
         conf['aws']['envtag']: conf['aws']['env']
       }
