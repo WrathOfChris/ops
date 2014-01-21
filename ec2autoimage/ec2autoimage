@@ -153,6 +153,7 @@ if ami == None:
 
 if verbose:
   print "AMI mapping %s to %s %s (%s)" % (aminame, ami.id, ami.name, ami.description)
+  sys.stdout.flush()
 
 #
 # Autoscale Group
@@ -206,6 +207,7 @@ if lc == None or lc.image_id != ami.id:
   asgupdate = True
   if verbose:
     print "active launch config %s ami != %s" % (asg.launch_config_name, ami.id)
+    sys.stdout.flush()
   lcconfigs = sorted(really_get_all_launch_configurations(), key=lambda a: a.name, reverse=True)
   lc = find_launch(args.group, lcconfigs)
 
@@ -213,6 +215,7 @@ if lc != None and lc.image_id != ami.id:
   asgupdate = True
   if verbose:
     print "launch config %s ami %s != %s" % (lc.name, lc.image_id, ami.id)
+    sys.stdout.flush()
 
   # New launch config name
   now = datetime.datetime.utcnow()
@@ -241,10 +244,12 @@ if lc != None and lc.image_id != ami.id:
     sys.exit(1)
   if verbose:
     print "creating launch config %s ami %s type %s key %s role %s" % (newlc.name, newlc.image_id, newlc.instance_type, newlc.key_name, newlc.instance_profile_name)
+    sys.stdout.flush()
   lc = newlc
 
 # Update Autoscale Group
 if asgupdate and lc:
   print "updating %s from %s -> %s" % (asg.name, asg.launch_config_name, lc.name)
+  sys.stdout.flush()
   asg.launch_config_name = lc.name
   asg.update()
