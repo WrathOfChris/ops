@@ -71,11 +71,13 @@ azcount = {}
 
 if verbose:
   print "%s rotating autoscale group in %s with count %i" % (args.group, args.region, args.count)
+  sys.stdout.flush()
 
 asg = awsasg.get_all_groups([args.group])[0]
 
 if verbose:
   print "%s rotating %i instances" % (args.group, len(asg.instances))
+  sys.stdout.flush()
 
 # start count of AZ instances
 for az in asg.availability_zones:
@@ -89,9 +91,11 @@ for i in asg.instances:
 for azname, count in azcount.items():
   if count > 0 and count <= args.count:
     print "WARNING: rotation will temporarily reduce redundancy in zone %s" % azname
+    sys.stdout.flush()
 
 if len(oldinst) < 2:
   print "WARNING: single autoscale instance, using accelerated rotation"
+  sys.stdout.flush()
 
 lbs = awselb.get_all_load_balancers(asg.load_balancers)
 
@@ -108,28 +112,33 @@ for thisinst in oldinst:
   if not verbose:
     # first part of rotating i-xxxxxx -> i-xxxxxx
     print "%s rotating %s ->" % (args.group, thisinst),
+    sys.stdout.flush()
 
   # remove instance from ELB
   elbsleep = 0
   for lb in lbs:
     if verbose:
       print "%s %s removing from ELB %s" % (asg.name, thisinst, lb.name)
+      sys.stdout.flush()
     awselb.deregister_instances(lb.name, thisinst)
     elbsleep = max(elbsleep, lb.health_check.interval * lb.health_check.healthy_threshold)
   # only sleep if this is a controlled rotation
   if len(oldinst) > 1:
     if verbose:
       print "%s %s waiting %d seconds for ELB deregistration" % (args.group, thisinst, elbsleep)
+      sys.stdout.flush()
     time.sleep(elbsleep)
 
   # remove instance from ASG
   if verbose:
     print "%s %s autoscale terminating" % (args.group, thisinst)
+    sys.stdout.flush()
   awsasg.terminate_instance(thisinst, decrement_capacity=False)
 
   # wait for ASG to start new instance
   if verbose:
     print "%s waiting for autoscale instance" % args.group
+    sys.stdout.flush()
   healthy = False
   while healthy == False:
     healthycnt = 0
@@ -142,9 +151,11 @@ for thisinst in oldinst:
         thisnewinst = i.instance_id
         if verbose:
           print "%s %s is %s" % (args.group, i.instance_id, str(i.lifecycle_state))
+          sys.stdout.flush()
         else:
           # second part of rotating i-xxxxxx -> i-xxxxxx
           print "%s" % i.instance_id
+          sys.stdout.flush()
     if healthycnt >= asg.desired_capacity:
       healthy = True
 
@@ -155,6 +166,7 @@ for thisinst in oldinst:
   # wait for instance health to be InService
   if verbose:
     print "%s %s waiting for ELB registration" % (args.group, thisnewinst)
+    sys.stdout.flush()
   healthy = False
   while healthy == False:
     healthycnt = 0
@@ -174,6 +186,7 @@ for thisinst in oldinst:
   # wait for all instances to be healthy, just in case
   if verbose:
     print "%s verifying all ELB instances healthy" % asg.name
+    sys.stdout.flush()
   healthy = False
   while healthy == False:
     healthycnt = 0
