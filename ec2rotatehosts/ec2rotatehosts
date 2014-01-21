@@ -116,10 +116,10 @@ for thisinst in oldinst:
       print "%s %s removing from ELB %s" % (asg.name, thisinst, lb.name)
     awselb.deregister_instances(lb.name, thisinst)
     elbsleep = max(elbsleep, lb.health_check.interval * lb.health_check.healthy_threshold)
-  if verbose:
-    print "%s %s waiting %d seconds for ELB deregistration" % (args.group, thisinst, elbsleep)
   # only sleep if this is a controlled rotation
   if len(oldinst) > 1:
+    if verbose:
+      print "%s %s waiting %d seconds for ELB deregistration" % (args.group, thisinst, elbsleep)
     time.sleep(elbsleep)
 
   # remove instance from ASG
