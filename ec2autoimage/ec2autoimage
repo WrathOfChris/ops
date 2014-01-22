@@ -222,6 +222,12 @@ if lc != None and lc.image_id != ami.id:
   nowstr = now.strftime("%Y%m%d%H%M%S")
   lcnamefull = "%s-%s" % (args.group, nowstr)
 
+  # Public flags are borked
+  if lc.AssociatePublicIpAddress or lc.associate_public_ip_address:
+    publicip = True
+  else:
+    publicip = None
+
   newlc = boto.ec2.autoscale.LaunchConfiguration(
       name = lcnamefull,
       image_id = ami.id,
@@ -236,14 +242,14 @@ if lc != None and lc.image_id != ami.id:
       spot_price = lc.spot_price,
       instance_profile_name = lc.instance_profile_name,
       ebs_optimized = lc.ebs_optimized,
-      associate_public_ip_address = lc.associate_public_ip_address
+      associate_public_ip_address = publicip
   )
   req = awsasg.create_launch_configuration(newlc)
   if req == None:
     print "failed creating launch configuration %s" % lcnamefull
     sys.exit(1)
   if verbose:
-    print "creating launch config %s ami %s type %s key %s role %s" % (newlc.name, newlc.image_id, newlc.instance_type, newlc.key_name, newlc.instance_profile_name)
+    print "creating launch config %s ami %s type %s key %s role %s public %s" % (newlc.name, newlc.image_id, newlc.instance_type, newlc.key_name, newlc.instance_profile_name, publicip)
     sys.stdout.flush()
   lc = newlc
 
