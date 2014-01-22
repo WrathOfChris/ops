@@ -223,10 +223,14 @@ if lc != None and lc.image_id != ami.id:
   lcnamefull = "%s-%s" % (args.group, nowstr)
 
   # Public flags are borked
-  if lc.AssociatePublicIpAddress or lc.associate_public_ip_address:
-    publicip = True
-  else:
+  publicip = None
+  try:
+    if lc.lc.AssociatePublicIpAddress:
+      publicip = True
+  except AttributeError:
     publicip = None
+  if lc.associate_public_ip_address:
+    publicip = True
 
   newlc = boto.ec2.autoscale.LaunchConfiguration(
       name = lcnamefull,
