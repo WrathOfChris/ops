@@ -600,6 +600,39 @@ for confelb in conf['elbs']:
       for l in l_missing:
         print "ELB-LISTEN %s %s/%s -> %s/%s" % (elb.name, l[0], l[2], l[1], l[4])
 
+#
+# BLOCK DEVICE MAPPINGS - http://aws.amazon.com/ec2/instance-types/
+#
+bdmapping={}
+bdmapping['c1.medium'] = 1
+bdmapping['c1.xlarge'] = 1
+bdmapping['c3.2xlarge'] = 2
+bdmapping['c3.4xlarge'] = 2
+bdmapping['c3.8xlarge'] = 2
+bdmapping['c3.large'] = 2
+bdmapping['c3.xlarge'] = 2
+bdmapping['cc2.8xlarge'] = 4
+bdmapping['cg1.4xlarge'] = 2
+bdmapping['cr1.8xlarge'] = 2
+bdmapping['g2.2xlarge'] = 1
+bdmapping['hi1.4xlarge'] = 2
+bdmapping['hs1.8xlarge'] = 24
+bdmapping['i2.2xlarge'] = 2
+bdmapping['i2.4xlarge'] = 4
+bdmapping['i2.8xlarge'] = 8
+bdmapping['i2.xlarge'] = 1
+bdmapping['m1.large'] = 2
+bdmapping['m1.medium'] = 1
+bdmapping['m1.small'] = 1
+bdmapping['m1.xlarge'] = 4
+bdmapping['m2.2xlarge'] = 1
+bdmapping['m2.4xlarge'] = 2
+bdmapping['m2.xlarge'] = 1
+bdmapping['m3.2xlarge'] = 2
+bdmapping['m3.large'] = 1
+bdmapping['m3.medium'] = 1
+bdmapping['m3.xlarge'] = 2
+
 def find_amibyname(name, amis):
   for a in amis:
     if str(a.name) == name:
@@ -662,6 +695,20 @@ for app in conf['apps']:
           print "APP-INST %s %s ami %s type %s host %s %s" % (app['name'], i.id, i.image_id, i.instance_type, i.private_dns_name, i.public_dns_name)
     sg = find_sg(app['group'], sgs)
 
+    mapping = None
+    if app['type'] in bdmapping:
+      mapping = boto.ec2.blockdevicemapping.BlockDeviceMapping()
+      for b in range(0, bdmapping[app['type']]):
+        # punt on dealing with complex case
+        if b > 24:
+          print "Seriously?  You want more than 24 devices?  Figure this out yourself."
+          break
+        # sdc..z
+        devname= '/dev/sd%s' % chr(ord('b') + b)
+        mapping[devname] = boto.ec2.blockdevicemapping.BlockDeviceType(ephemeral_name="ephemeral%d" % b)
+        if verbose:
+          print "APP-INST block device mapping %s to %s" % (mapping[devname].ephemeral_name, devname)
+
     # Split between defined subnets
     instances = []
     for i in range(app['count'] - len(running)):
@@ -681,6 +728,7 @@ for app in conf['apps']:
           key_name = app['keypair'],
           instance_type = app['type'],
           network_interfaces = interfaces,
+          block_device_map = mapping,
           instance_initiated_shutdown_behavior = 'terminate',
           instance_profile_name = app['role']
         )
@@ -695,6 +743,7 @@ for app in conf['apps']:
           security_group_ids = [ str(sg.id) ],
           instance_type = app['type'],
           subnet_id = vpc_subnetids[subnetidx],
+          block_device_map = mapping,
           instance_initiated_shutdown_behavior = 'terminate',
           instance_profile_name = app['role']
         )
@@ -769,6 +818,21 @@ for app in conf['apps']:
         publicip = True
       else:
         publicip = False
+
+      mapping = None
+      if app['type'] in bdmapping:
+        mapping = boto.ec2.blockdevicemapping.BlockDeviceMapping()
+        for b in range(0, bdmapping[app['type']]):
+          # punt on dealing with complex case
+          if b > 24:
+            print "Seriously?  You want more than 24 devices?  Figure this out yourself."
+            break
+          # sdc..z
+          devname= '/dev/sd%s' % chr(ord('b') + b)
+          mapping[devname] = boto.ec2.blockdevicemapping.BlockDeviceType(ephemeral_name="ephemeral%d" % b)
+          if verbose:
+            print "APP-INST block device mapping %s to %s" % (mapping[devname].ephemeral_name, devname)
+
       print "Creating Launch Config %s" % asgnamefull
       lc = boto.ec2.autoscale.LaunchConfiguration(
           name = asgnamefull,
@@ -777,6 +841,7 @@ for app in conf['apps']:
           key_name = app['keypair'],
           instance_type = app['type'],
           instance_profile_name = app['role'],
+          block_device_mappings = [mapping],
           associate_public_ip_address = publicip
       )
       req = awsasg.create_launch_configuration(lc)
