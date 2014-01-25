@@ -97,7 +97,9 @@ if len(oldinst) < 2:
   print "WARNING: single autoscale instance, using accelerated rotation"
   sys.stdout.flush()
 
-lbs = awselb.get_all_load_balancers(asg.load_balancers)
+lbs = []
+if asg.load_balancers:
+  lbs = awselb.get_all_load_balancers(asg.load_balancers)
 
 # check cross-zone load balancing - warn if empty AZ will deadend requests
 for lb in lbs:
@@ -170,7 +172,9 @@ for thisinst in oldinst:
   healthy = False
   while healthy == False:
     healthycnt = 0
-    lbs = awselb.get_all_load_balancers(asg.load_balancers)
+    lbs = []
+    if asg.load_balancers:
+      lbs = awselb.get_all_load_balancers(asg.load_balancers)
     for lb in lbs:
       healths = awselb.describe_instance_health(lb.name, [thisnewinst])
       for h in healths:
@@ -191,7 +195,9 @@ for thisinst in oldinst:
   while healthy == False:
     healthycnt = 0
     healthyneed = 0
-    lbs = awselb.get_all_load_balancers(asg.load_balancers)
+    lbs = []
+    if asg.load_balancers:
+      lbs = awselb.get_all_load_balancers(asg.load_balancers)
     for lb in lbs:
       healths = awselb.describe_instance_health(lb.name)
       healthyneed += len(healths)
