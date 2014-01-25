@@ -145,17 +145,18 @@ def find_subnet(cidr, nets):
 # Validate Subnets
 nets = awsvpc.get_all_subnets()
 azi = iter(conf['vpc']['azs'])
-for n in conf['vpc']['subnets']:
-  net = find_subnet(n, nets)
-  az = azi.next()
-  if net == None:
-    print "Creating VPC subnet %s AZ %s" % (n, az)
-    net = awsvpc.create_subnet(vpc.id, n, availability_zone=az)
+if 'subnets' in conf['vpc']:
+  for n in conf['vpc']['subnets']:
+    net = find_subnet(n, nets)
+    az = azi.next()
     if net == None:
-      print "Failed creating VPC subnet %s" % n
-      sys.exit(1)
-  if verbose:
-    print "VPC-SUBNET %s %s PRIVATE" % (net.id, net.cidr_block)
+      print "Creating VPC subnet %s AZ %s" % (n, az)
+      net = awsvpc.create_subnet(vpc.id, n, availability_zone=az)
+      if net == None:
+        print "Failed creating VPC subnet %s" % n
+        sys.exit(1)
+    if verbose:
+      print "VPC-SUBNET %s %s PRIVATE" % (net.id, net.cidr_block)
 
 # Public subnets
 azi = iter(conf['vpc']['azs'])
@@ -173,9 +174,10 @@ for n in conf['vpc']['pubsubnets']:
 
 # Refresh and load subnet IDs
 nets = awsvpc.get_all_subnets()
-for n in conf['vpc']['subnets']:
-  net = find_subnet(n, nets)
-  vpc_subnetids.append(net.id)
+if 'subnets' in conf['vpc']:
+  for n in conf['vpc']['subnets']:
+    net = find_subnet(n, nets)
+    vpc_subnetids.append(net.id)
 
 # Public subnet IDs
 for n in conf['vpc']['pubsubnets']:
