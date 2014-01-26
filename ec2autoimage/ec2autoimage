@@ -88,7 +88,7 @@ aminameenv = None
 
 # Search exact ID match
 if args.ami:
-  amis = awsec2.get_all_images(images=[args.ami])
+  amis = awsec2.get_all_images(image_ids=[args.ami])
   if len(amis) > 0:
     ami = amis[0]
 
@@ -105,7 +105,7 @@ if aminame == None and args.service:
 if aminame and args.environ:
   aminameenv = "%s-%s" % (args.environ, aminame)
 
-if aminame == None:
+if ami == None and aminame == None:
   print "no name or service provided"
   sys.exit(1)
 
@@ -209,7 +209,9 @@ if lc == None or lc.image_id != ami.id:
     print "active launch config %s ami != %s" % (asg.launch_config_name, ami.id)
     sys.stdout.flush()
   lcconfigs = sorted(really_get_all_launch_configurations(), key=lambda a: a.name, reverse=True)
-  lc = find_launch(args.group, lcconfigs)
+  newlc = find_launch(args.group, lcconfigs)
+  if newlc:
+    lc = newlc
 
 if lc != None and lc.image_id != ami.id:
   asgupdate = True
@@ -225,13 +227,44 @@ if lc != None and lc.image_id != ami.id:
   # Public flags are borked
   publicip = None
   try:
-    if lc.lc.AssociatePublicIpAddress:
+    if lc.AssociatePublicIpAddress:
       publicip = True
   except AttributeError:
     publicip = None
   if lc.associate_public_ip_address:
     publicip = True
 
+  instmon = False
+  if lc.instance_monitoring.enabled == u'true':
+    instmon = True
+
+  #
+  # Existing LaunchConfig returns a list of BlockDeviceMapping()
+  # Creating LaunchConfig requires a list with a single BlockDeviceMapping(),
+  # which is a dict of BlockDeviceType()
+  #
+  mapping = None
+  if len(lc.block_device_mappings) > 0:
+    mapping = boto.ec2.blockdevicemapping.BlockDeviceMapping()
+    for bdm in lc.block_device_mappings:
+      # because, unicode
+      devname = str(bdm.device_name)
+
+      if bdm.ebs:
+        print "EBS: %s/%s" % (str(bdm.ebs.volume_size), str(bdm.ebs.snapshot_id))
+        deleteontermination = True
+        try:
+          if bdm.ebs.deleteontermination and bdm.ebs.deleteontermination == u'false':
+            deleteontermination = False
+        except AttributeError:
+          deleteontermination = True
+        mapping[devname] = boto.ec2.blockdevicemapping.BlockDeviceType(snapshot_id=bdm.ebs.snapshot_id, size=bdm.ebs.volume_size, delete_on_termination=deleteontermination)
+      else:
+        mapping[devname] = boto.ec2.blockdevicemapping.BlockDeviceType(ephemeral_name=bdm.virtual_name)
+    
+  maplist = None
+  if mapping and len(mapping) > 0:
+    maplist = [mapping]
   newlc = boto.ec2.autoscale.LaunchConfiguration(
       name = lcnamefull,
       image_id = ami.id,
@@ -241,8 +274,8 @@ if lc != None and lc.image_id != ami.id:
       instance_type = lc.instance_type,
       kernel_id = lc.kernel_id,
       ramdisk_id = lc.ramdisk_id,
-      block_device_mappings = lc.block_device_mappings,
-      instance_monitoring = lc.instance_monitoring,
+      block_device_mappings = maplist,
+      instance_monitoring = instmon,
       spot_price = lc.spot_price,
       instance_profile_name = lc.instance_profile_name,
       ebs_optimized = lc.ebs_optimized,
