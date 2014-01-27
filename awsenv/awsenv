@@ -1,0 +1,40 @@
+#!/bin/bash -i
+#
+# Run this as:
+#
+#   eval `awsenv username`
+#
+AWSUSER=$1
+
+if [ -f ~/.aws/user-$AWSUSER ]; then
+  . ~/.aws/user-$AWSUSER
+else
+  echo "ERROR - no such user file ~/.aws/user-$AWSUSER"
+  exit 1
+fi
+
+AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY
+AWS_SECRET_ACCESS_KEY=$AWS_SECRET_KEY
+
+if echo "$PS1" | grep "^aws-" >/dev/null ; then
+  PS1=`echo "$PS1" | cut -d: -f 2-`
+fi
+
+PS1="aws-${AWSUSER}:${PS1}"
+export PS1 AWS_ACCESS_KEY AWS_SECRET_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_CREDENTIAL_FILE
+
+cat >~/.aws/iam-${AWSUSER} <<__EOT
+# ${AWSUSER}
+AWSAccessKeyId=${AWS_ACCESS_KEY}
+AWSSecretKey=${AWS_SECRET_KEY}
+__EOT
+
+cat <<__EOT
+AWSUSER="$AWSUSER"
+AWS_ACCESS_KEY="$AWS_ACCESS_KEY"
+AWS_SECRET_KEY="$AWS_SECRET_KEY"
+AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY"
+AWS_SECRET_ACCESS_KEY="$AWS_SECRET_KEY"
+AWS_CREDENTIAL_FILE="${HOME}/.aws/iam-${AWSUSER}"
+PS1="$PS1"
+__EOT
