@@ -201,6 +201,12 @@ for app in conf['apps']:
       if len(amis) > 0:
         ami = find_amibyname("%s" % app['aminame'],
             sorted(amis, key=lambda a: a.name, reverse=True))
+    if ami == None:
+      amifilter = { 'name': app['aminame'] }
+      amis = awsec2.get_all_images(filters=amifilter)
+      if len(amis) > 0:
+        ami = find_amibyname("%s" % app['aminame'],
+            sorted(amis, key=lambda a: a.name, reverse=True))
     if ami != None:
       app['ami'] = ami.id
       print "AMI mapping %s to %s %s (%s)" % (app['aminame'], ami.id, ami.name, ami.description)
@@ -212,6 +218,9 @@ for app in conf['apps']:
   nowstr = now.strftime("%Y%m%d%H%M%S")
   asgname = "%s-%s" % (app['name'], conf['aws']['env'])
   asgnamefull = "%s-%s" % (asgname, nowstr)
+  role = None
+  if 'role' in app:
+    role = app['role']
 
   print "Creating Launch Config %s" % asgnamefull
   lc = boto.ec2.autoscale.LaunchConfiguration(
@@ -220,7 +229,7 @@ for app in conf['apps']:
       image_id = app['ami'],
       key_name = app['keypair'],
       instance_type = app['type'],
-      instance_profile_name = app['role'],
+      instance_profile_name = role,
       block_device_mappings = [mapping],
       associate_public_ip_address = publicip
   )
@@ -265,8 +274,12 @@ for app in conf['apps']:
   # Find ELB if requested
   elb = None
   if 'elb' in app:
-    elb = find_elb_conf(app['elb'], conf['elbs'])
-    elb_sg = find_sg(elb['group'], sgs)
+    elbconf = find_elb_conf(app['elb'], conf['elbs'])
+    if elbconf != None:
+      elbs = awselb.get_all_load_balancers("%s-%s" % (app['elb'], conf['aws']['env']))
+    else:
+      elbs = awselb.get_all_load_balancers(app['elb'])
+    elb = elbs[0]
 
   asgroups = awsasg.get_all_groups(names=[asgname])
   if 'public' in app:
@@ -280,7 +293,7 @@ for app in conf['apps']:
         group_name = asgname,
         availability_zones = conf['vpc']['azs'],
         launch_config = lc,
-        load_balancers = [ "%s-%s" % (elb['name'], conf['aws']['env']) ],
+        load_balancers = [ elb.name ],
         min_size = app['autoscale']['min'],
         max_size = app['autoscale']['max'],
         tags = astags,
