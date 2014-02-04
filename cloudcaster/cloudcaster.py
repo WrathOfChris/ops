@@ -931,215 +931,216 @@ for app in conf['apps']:
 #
 # NAT/VPN instance
 #
-nat_sg = find_sg(conf['nat']['group'], sgs)
-if nat_sg == None:
-  print "Creating Security Group %s for NAT" % (conf['nat']['group'])
-  nat_sg = awsec2.create_security_group(conf['nat']['group'], conf['nat']['group'], vpc_id = vpc.id)
+if 'nat' in conf:
+  nat_sg = find_sg(conf['nat']['group'], sgs)
   if nat_sg == None:
-    print "Failed creating SG %s for NAT" % (conf['nat']['group'])
-    sys.exit(1)
-  # Refresh SG list to catch the egress rule
-  sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-  nat_sg = find_sg(conf['nat']['group'], sgs)
-if verbose:
-  print "SECGRP-NAT %s %s" % (nat_sg.id, nat_sg.name)
-
-# 22/ssh
-rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', nat_sg.rules)
-if rule == None:
-  print "Creating SG rule for SSH -> NAT"
-  if awsec2.authorize_security_group(group_id = nat_sg.id,
-        cidr_ip = '0.0.0.0/0',
-        ip_protocol = 'tcp',
-        from_port = 22,
-        to_port = 22
-      ) != True:
-    print "Failed authorizing SSH->NAT"
-    sys.exit(1)
-  sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-  nat_sg = find_sg(conf['nat']['group'], sgs)
-  rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', nat_sg.rules)
-if verbose:
-  print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
-
-# icmp
-if 'privnet' in conf['aws'].keys():
-  rule = find_sg_rule_cidr(conf['aws']['privnet'], -1, -1, 'icmp', nat_sg.rules)
-  if rule == None:
-    print "Creating SG rule for NAT ICMP -> SG"
-    if awsec2.authorize_security_group(group_id = nat_sg.id,
-          cidr_ip = conf['aws']['privnet'],
-          ip_protocol = 'icmp',
-          from_port = -1,
-          to_port = -1 
-        ) != True:
-      print "Failed authorizing NAT ICMP->SG"
+    print "Creating Security Group %s for NAT" % (conf['nat']['group'])
+    nat_sg = awsec2.create_security_group(conf['nat']['group'], conf['nat']['group'], vpc_id = vpc.id)
+    if nat_sg == None:
+      print "Failed creating SG %s for NAT" % (conf['nat']['group'])
       sys.exit(1)
+    # Refresh SG list to catch the egress rule
     sgs = awsec2.get_all_security_groups(filters=vpcfilter)
     nat_sg = find_sg(conf['nat']['group'], sgs)
-    rule = find_sg_rule_cidr(conf['aws']['privnet'], -1, -1, 'icmp', nat_sg.rules)
   if verbose:
-    print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+    print "SECGRP-NAT %s %s" % (nat_sg.id, nat_sg.name)
 
-# icmp/echoreq
-rule = find_sg_rule_cidr('0.0.0.0/0', 8, -1, 'icmp', nat_sg.rules)
-if rule == None:
-  print "Creating SG rule for NAT ICMP"
-  if awsec2.authorize_security_group(group_id = nat_sg.id,
-        cidr_ip = '0.0.0.0/0',
-        ip_protocol = 'icmp',
-        from_port = 8,
-        to_port = -1 
-      ) != True:
-    print "Failed authorizing NAT ICMP"
-    sys.exit(1)
-  sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-  nat_sg = find_sg(conf['nat']['group'], sgs)
-  rule = find_sg_rule_cidr('0.0.0.0/0', 8, -1, 'icmp', nat_sg.rules)
-if verbose:
-  print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
-
-# tcp/traceroute
-rule = find_sg_rule_cidr('0.0.0.0/0', 33434, 33534, 'udp', nat_sg.rules)
-if rule == None:
-  print "Creating SG rule for TRACEROUTE -> NAT"
-  if awsec2.authorize_security_group(group_id = nat_sg.id,
-        cidr_ip = '0.0.0.0/0',
-        ip_protocol = 'udp',
-        from_port = 33434,
-        to_port = 33534
-      ) != True:
-    print "Failed authorizing TRACEROUTE->NAT"
-    sys.exit(1)
-  sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-  nat_sg = find_sg(conf['nat']['group'], sgs)
-  rule = find_sg_rule_cidr('0.0.0.0/0', 33434, 33534, 'udp', nat_sg.rules)
-if verbose:
-  print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
-
-for port in conf['nat']['ports']:
-  p_from = port['from']
-  p_to = port['to']
-  p_prot = port['prot']
-  if p_prot != 'udp' and p_prot != 'icmp':
-    p_prot = 'tcp'
-
-  # NAT host rule
-  rule = find_sg_rule_cidr('0.0.0.0/0', p_from, p_to, p_prot, nat_sg.rules)
+  # 22/ssh
+  rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', nat_sg.rules)
   if rule == None:
-    print "Creating SG rule for world -> NAT (%u:%u)" % (p_from, p_to)
+    print "Creating SG rule for SSH -> NAT"
     if awsec2.authorize_security_group(group_id = nat_sg.id,
           cidr_ip = '0.0.0.0/0',
-          ip_protocol = p_prot,
-          from_port = p_from,
-          to_port = p_to
+          ip_protocol = 'tcp',
+          from_port = 22,
+          to_port = 22
         ) != True:
-      print "Failed authorizing world -> NAT"
+      print "Failed authorizing SSH->NAT"
       sys.exit(1)
     sgs = awsec2.get_all_security_groups(filters=vpcfilter)
     nat_sg = find_sg(conf['nat']['group'], sgs)
-    rule = find_sg_rule_cidr('0.0.0.0/0', p_from, p_to, p_prot, nat_sg.rules)
+    rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', nat_sg.rules)
   if verbose:
     print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
 
-# all/vpcnets
-rule = find_sg_rule_cidr(conf['vpc']['cidr'], None, None, '-1', nat_sg.rules)
-if rule == None:
-  print "Creating SG rule for ALL-VPC -> NAT"
-  if awsec2.authorize_security_group(group_id = nat_sg.id,
-        cidr_ip = conf['vpc']['cidr'],
-        ip_protocol = '-1'
-      ) != True:
-    print "Failed authorizing ALL-VPC->NAT"
-    sys.exit(1)
-  sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-  nat_sg = find_sg(conf['nat']['group'], sgs)
-  rule = find_sg_rule_cidr(conf['vpc']['cidr'], None, None, '-1', nat_sg.rules)
-if verbose:
-  print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
-
-rule = find_sg_rule_cidr('0.0.0.0/0', None, None, '-1', nat_sg.rules_egress)
-if rule == None:
-  if awsec2.authorize_security_group_egress(group_id = nat_sg.id,
-        cidr_ip = '0.0.0.0/0',
-        ip_protocol = '-1'
-      ) != True:
-    print "Failed authorizing NAT->EGRESS"
-    sys.exit(1)
-  sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-  nat_sg = find_sg(conf['nat']['group'], sgs)
-  rule = find_sg_rule_cidr('0.0.0.0/0', None, None, '-1', nat_sg.rules_egress)
-if verbose:
-  print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
-
-tagfilter = {
-    'tag:%s' % conf['aws']['svctag']: conf['nat']['svctag'],
-    'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
-    'vpc-id': vpc.id,
-    'instance-state-name': 'running'
-}
-running = awsec2.get_all_instances(filters=tagfilter)
-# Check running instances match specification
-for r in running:
-  for i in r.instances:
-    if i.image_id != conf['nat']['ami']:
-      print "WARNING: NAT instance %s not run from requested AMI %s" % (i.id, conf['nat']['ami'])
+  # icmp
+  if 'privnet' in conf['aws'].keys():
+    rule = find_sg_rule_cidr(conf['aws']['privnet'], -1, -1, 'icmp', nat_sg.rules)
+    if rule == None:
+      print "Creating SG rule for NAT ICMP -> SG"
+      if awsec2.authorize_security_group(group_id = nat_sg.id,
+            cidr_ip = conf['aws']['privnet'],
+            ip_protocol = 'icmp',
+            from_port = -1,
+            to_port = -1 
+          ) != True:
+        print "Failed authorizing NAT ICMP->SG"
+        sys.exit(1)
+      sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+      nat_sg = find_sg(conf['nat']['group'], sgs)
+      rule = find_sg_rule_cidr(conf['aws']['privnet'], -1, -1, 'icmp', nat_sg.rules)
     if verbose:
-      print "NAT-INST %s %s ami %s type %s host %s %s" % (conf['nat']['name'], i.id, i.image_id, i.instance_type, i.private_dns_name, i.public_dns_name)
-if len(running) < 1:
-  # create in first public subnet
-  subnetidx = nat_subnetidx
-  interface = boto.ec2.networkinterface.NetworkInterfaceSpecification(
-      subnet_id=vpc_pubsubnetids[subnetidx],
-      groups=[ str(nat_sg.id) ],
-      associate_public_ip_address=True)
-  interfaces = boto.ec2.networkinterface.NetworkInterfaceCollection(interface)
-  print "Creating NAT instance"
-  resv = awsec2.run_instances(
-    security_groups = None,
-    image_id = conf['nat']['ami'],
-    min_count = 1,
-    max_count = 1,
-    key_name = conf['nat']['keypair'],
-    instance_type = conf['nat']['type'],
-    network_interfaces = interfaces,
-    instance_initiated_shutdown_behavior = 'terminate',
-    instance_profile_name =conf['nat']['role'] 
-  )
-  awsec2.create_tags(resv.instances[0].id, {
-    "Name": "%s-%s" % (conf['nat']['name'], conf['aws']['env']),
-    conf['aws']['svctag']: conf['nat']['svctag'],
-    conf['aws']['envtag']: conf['aws']['env']
-  })
-  resv.instances[0].update()
-  while resv.instances[0].state == 'pending':
-    print "Waiting for NAT to start: %s" % resv.instances[0].state
-    time.sleep(nat_instwait)
-    resv.instances[0].update()
+      print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+
+  # icmp/echoreq
+  rule = find_sg_rule_cidr('0.0.0.0/0', 8, -1, 'icmp', nat_sg.rules)
+  if rule == None:
+    print "Creating SG rule for NAT ICMP"
+    if awsec2.authorize_security_group(group_id = nat_sg.id,
+          cidr_ip = '0.0.0.0/0',
+          ip_protocol = 'icmp',
+          from_port = 8,
+          to_port = -1 
+        ) != True:
+      print "Failed authorizing NAT ICMP"
+      sys.exit(1)
+    sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+    nat_sg = find_sg(conf['nat']['group'], sgs)
+    rule = find_sg_rule_cidr('0.0.0.0/0', 8, -1, 'icmp', nat_sg.rules)
   if verbose:
+    print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+
+  # tcp/traceroute
+  rule = find_sg_rule_cidr('0.0.0.0/0', 33434, 33534, 'udp', nat_sg.rules)
+  if rule == None:
+    print "Creating SG rule for TRACEROUTE -> NAT"
+    if awsec2.authorize_security_group(group_id = nat_sg.id,
+          cidr_ip = '0.0.0.0/0',
+          ip_protocol = 'udp',
+          from_port = 33434,
+          to_port = 33534
+        ) != True:
+      print "Failed authorizing TRACEROUTE->NAT"
+      sys.exit(1)
+    sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+    nat_sg = find_sg(conf['nat']['group'], sgs)
+    rule = find_sg_rule_cidr('0.0.0.0/0', 33434, 33534, 'udp', nat_sg.rules)
+  if verbose:
+    print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+
+  for port in conf['nat']['ports']:
+    p_from = port['from']
+    p_to = port['to']
+    p_prot = port['prot']
+    if p_prot != 'udp' and p_prot != 'icmp':
+      p_prot = 'tcp'
+
+    # NAT host rule
+    rule = find_sg_rule_cidr('0.0.0.0/0', p_from, p_to, p_prot, nat_sg.rules)
+    if rule == None:
+      print "Creating SG rule for world -> NAT (%u:%u)" % (p_from, p_to)
+      if awsec2.authorize_security_group(group_id = nat_sg.id,
+            cidr_ip = '0.0.0.0/0',
+            ip_protocol = p_prot,
+            from_port = p_from,
+            to_port = p_to
+          ) != True:
+        print "Failed authorizing world -> NAT"
+        sys.exit(1)
+      sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+      nat_sg = find_sg(conf['nat']['group'], sgs)
+      rule = find_sg_rule_cidr('0.0.0.0/0', p_from, p_to, p_prot, nat_sg.rules)
+    if verbose:
+      print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+
+  # all/vpcnets
+  rule = find_sg_rule_cidr(conf['vpc']['cidr'], None, None, '-1', nat_sg.rules)
+  if rule == None:
+    print "Creating SG rule for ALL-VPC -> NAT"
+    if awsec2.authorize_security_group(group_id = nat_sg.id,
+          cidr_ip = conf['vpc']['cidr'],
+          ip_protocol = '-1'
+        ) != True:
+      print "Failed authorizing ALL-VPC->NAT"
+      sys.exit(1)
+    sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+    nat_sg = find_sg(conf['nat']['group'], sgs)
+    rule = find_sg_rule_cidr(conf['vpc']['cidr'], None, None, '-1', nat_sg.rules)
+  if verbose:
+    print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+
+  rule = find_sg_rule_cidr('0.0.0.0/0', None, None, '-1', nat_sg.rules_egress)
+  if rule == None:
+    if awsec2.authorize_security_group_egress(group_id = nat_sg.id,
+          cidr_ip = '0.0.0.0/0',
+          ip_protocol = '-1'
+        ) != True:
+      print "Failed authorizing NAT->EGRESS"
+      sys.exit(1)
+    sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+    nat_sg = find_sg(conf['nat']['group'], sgs)
+    rule = find_sg_rule_cidr('0.0.0.0/0', None, None, '-1', nat_sg.rules_egress)
+  if verbose:
+    print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+
+  tagfilter = {
+      'tag:%s' % conf['aws']['svctag']: conf['nat']['svctag'],
+      'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
+      'vpc-id': vpc.id,
+      'instance-state-name': 'running'
+  }
+  running = awsec2.get_all_instances(filters=tagfilter)
+  # Check running instances match specification
+  for r in running:
+    for i in r.instances:
+      if i.image_id != conf['nat']['ami']:
+        print "WARNING: NAT instance %s not run from requested AMI %s" % (i.id, conf['nat']['ami'])
+      if verbose:
+        print "NAT-INST %s %s ami %s type %s host %s %s" % (conf['nat']['name'], i.id, i.image_id, i.instance_type, i.private_dns_name, i.public_dns_name)
+  if len(running) < 1:
+    # create in first public subnet
+    subnetidx = nat_subnetidx
+    interface = boto.ec2.networkinterface.NetworkInterfaceSpecification(
+        subnet_id=vpc_pubsubnetids[subnetidx],
+        groups=[ str(nat_sg.id) ],
+        associate_public_ip_address=True)
+    interfaces = boto.ec2.networkinterface.NetworkInterfaceCollection(interface)
+    print "Creating NAT instance"
+    resv = awsec2.run_instances(
+      security_groups = None,
+      image_id = conf['nat']['ami'],
+      min_count = 1,
+      max_count = 1,
+      key_name = conf['nat']['keypair'],
+      instance_type = conf['nat']['type'],
+      network_interfaces = interfaces,
+      instance_initiated_shutdown_behavior = 'terminate',
+      instance_profile_name =conf['nat']['role'] 
+    )
+    awsec2.create_tags(resv.instances[0].id, {
+      "Name": "%s-%s" % (conf['nat']['name'], conf['aws']['env']),
+      conf['aws']['svctag']: conf['nat']['svctag'],
+      conf['aws']['envtag']: conf['aws']['env']
+    })
+    resv.instances[0].update()
+    while resv.instances[0].state == 'pending':
+      print "Waiting for NAT to start: %s" % resv.instances[0].state
+      time.sleep(nat_instwait)
+      resv.instances[0].update()
+    if verbose:
+      for i in resv.instances:
+        print "NAT-INST %s %s ami %s type %s host %s" % (conf['nat']['name'], i.id, i.image_id, i.instance_type, i.private_dns_name)
+
+  tagfilter = {
+      'tag:%s' % conf['aws']['svctag']: conf['nat']['svctag'],
+      'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
+      'vpc-id': vpc.id,
+      'instance-state-name': 'running'
+  }
+  running = awsec2.get_all_instances(filters=tagfilter)
+  for resv in running:
     for i in resv.instances:
-      print "NAT-INST %s %s ami %s type %s host %s" % (conf['nat']['name'], i.id, i.image_id, i.instance_type, i.private_dns_name)
+      nat_instances.append(i.id)
+      # XXX use first NAT discovered
+      if nat_publicdns == None:
+        nat_publicdns = i.public_dns_name
 
-tagfilter = {
-    'tag:%s' % conf['aws']['svctag']: conf['nat']['svctag'],
-    'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
-    'vpc-id': vpc.id,
-    'instance-state-name': 'running'
-}
-running = awsec2.get_all_instances(filters=tagfilter)
-for resv in running:
-  for i in resv.instances:
-    nat_instances.append(i.id)
-    # XXX use first NAT discovered
-    if nat_publicdns == None:
-      nat_publicdns = i.public_dns_name
-
-for inst in nat_instances:
-  attr = awsec2.get_instance_attribute(inst, 'sourceDestCheck')
-  if attr == None or attr['sourceDestCheck'] != False:
-    print "Setting sourceDestCheck on NAT instance"
-    if awsec2.modify_instance_attribute(inst, 'sourceDestCheck', False) != True:
-      print "Cannot set sourceDestCheck on NAT instance"
+  for inst in nat_instances:
+    attr = awsec2.get_instance_attribute(inst, 'sourceDestCheck')
+    if attr == None or attr['sourceDestCheck'] != False:
+      print "Setting sourceDestCheck on NAT instance"
+      if awsec2.modify_instance_attribute(inst, 'sourceDestCheck', False) != True:
+        print "Cannot set sourceDestCheck on NAT instance"
 
 #
 # ROUTING TABLES
@@ -1199,16 +1200,18 @@ for s in vpc_subnetids:
     print "ROUTE %s subnet %s" % (rtmain.id, s)
 route = find_route_bycidr('0.0.0.0/0', rtmain)
 if route == None:
-  print "Creating MAIN route for 0.0.0.0/0 -> NAT"
-  # XXX use first NAT discovered
-  route = awsvpc.create_route(rtmain.id, destination_cidr_block='0.0.0.0/0',
-      instance_id=nat_instances[0])
+  if 'nat' in conf:
+    print "Creating MAIN route for 0.0.0.0/0 -> NAT"
+    # XXX use first NAT discovered
+    route = awsvpc.create_route(rtmain.id, destination_cidr_block='0.0.0.0/0',
+        instance_id=nat_instances[0])
   if route == None:
     print "Missing MAIN route for 0.0.0.0/0 -> NAT"
     sys.exit(1)
 else:
-  if str(route.instance_id) != nat_instances[0]:
-    print "WARNING: MAIN route 0.0.0.0/0 does NOT point to NAT %s" % rtmain.id
+  if 'nat' in conf:
+    if str(route.instance_id) != nat_instances[0]:
+      print "WARNING: MAIN route 0.0.0.0/0 does NOT point to NAT %s" % rtmain.id
   if verbose:
     print "ROUTE %s %s instance %s" % (rtmain.id, route.destination_cidr_block, route.instance_id)
 
@@ -1237,16 +1240,18 @@ else:
 # Public routing table -> privnet via vpn
 route = find_route_bycidr(conf['aws']['privnet'], rtpublic)
 if route == None:
-  print "Creating PUBLIC route for %s -> NAT/VPN" % conf['aws']['privnet']
-  # XXX use first NAT discovered
-  route = awsvpc.create_route(rtpublic.id, destination_cidr_block=conf['aws']['privnet'],
-      instance_id=nat_instances[0])
+  if 'nat' in conf:
+    print "Creating PUBLIC route for %s -> NAT/VPN" % conf['aws']['privnet']
+    # XXX use first NAT discovered
+    route = awsvpc.create_route(rtpublic.id, destination_cidr_block=conf['aws']['privnet'],
+        instance_id=nat_instances[0])
   if route == None:
     print "Missing PUBLIC route for %s -> NAT/VPN" % conf['aws']['privnet']
     sys.exit(1)
 else:
-  if str(route.instance_id) != nat_instances[0]:
-    print "WARNING: PUBLIC route %s does NOT point to NAT %s" % (conf['aws']['privnet'], rtpublic.id)
+  if 'nat' in conf:
+    if str(route.instance_id) != nat_instances[0]:
+      print "WARNING: PUBLIC route %s does NOT point to NAT %s" % (conf['aws']['privnet'], rtpublic.id)
   if verbose:
     print "ROUTE %s %s instance %s" % (rtpublic.id, route.destination_cidr_block, route.instance_id)
 
@@ -1256,17 +1261,18 @@ else:
 zone = awsr53.get_zone(conf['aws']['zone'])
 
 # Route53 - NAT instance
-myname = "%s-%s.%s-%s.%s.%s" % (conf['nat']['name'], conf['aws']['env'], conf['aws']['provider'], conf['aws']['region'], conf['aws']['continent'], conf['aws']['zone'])
-zonerecs = zone.find_records(myname, 'CNAME')
-if zonerecs == None:
-  print "Creating Route53 %s -> %s" % (myname, nat_publicdns)
-  zone.add_cname(myname, nat_publicdns)
-else:
-  if zonerecs.resource_records[0] != "%s." % nat_publicdns:
-    print "Updating Route53 %s FROM %s TO %s" % (myname, zonerecs.resource_records[0], nat_publicdns)
-    zone.update_cname(myname, nat_publicdns)
-if verbose:
-  print "DNS %s -> %s" % (myname, nat_publicdns)
+if 'nat' in conf:
+  myname = "%s-%s.%s-%s.%s.%s" % (conf['nat']['name'], conf['aws']['env'], conf['aws']['provider'], conf['aws']['region'], conf['aws']['continent'], conf['aws']['zone'])
+  zonerecs = zone.find_records(myname, 'CNAME')
+  if zonerecs == None:
+    print "Creating Route53 %s -> %s" % (myname, nat_publicdns)
+    zone.add_cname(myname, nat_publicdns)
+  else:
+    if zonerecs.resource_records[0] != "%s." % nat_publicdns:
+      print "Updating Route53 %s FROM %s TO %s" % (myname, zonerecs.resource_records[0], nat_publicdns)
+      zone.update_cname(myname, nat_publicdns)
+  if verbose:
+    print "DNS %s -> %s" % (myname, nat_publicdns)
 
 # Route53 - ELB
 for confelb in conf['elbs']:
