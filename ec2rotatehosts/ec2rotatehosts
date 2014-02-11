@@ -52,6 +52,7 @@ parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
 parser.add_argument("-r", "--region", help="ec2 region")
 parser.add_argument("-c", "--count", help="concurrent rotations", default=1)
 parser.add_argument("-s", "--sleep", help="wait sleep", default=5)
+parser.add_argument("-T", "--turbo", help="turbo mode", action="store_true", default=False)
 parser.add_argument("group", help="autoscale group to rotoate")
 args = parser.parse_args()
 if args.group == None:
@@ -75,6 +76,9 @@ if verbose:
 
 asg = awsasg.get_all_groups([args.group])[0]
 
+capacity = asg.desired_capacity
+asgmaxsize = asg.max_size
+
 if verbose:
   print "%s rotating %i instances" % (args.group, len(asg.instances))
   sys.stdout.flush()
@@ -83,31 +87,190 @@ if verbose:
 for az in asg.availability_zones:
   azcount[str(az)] = 0
 
+# store original instance list
 for i in asg.instances:
   oldinst.append(i.instance_id)
   azcount[str(i.availability_zone)] += 1
-
-# check for reduced redundancy in each zone, warn if AZ will empty
-for azname, count in azcount.items():
-  if count > 0 and count <= args.count:
-    print "WARNING: rotation will temporarily reduce redundancy in zone %s" % azname
-    sys.stdout.flush()
-
-if len(oldinst) < 2:
-  print "WARNING: single autoscale instance, using accelerated rotation"
-  sys.stdout.flush()
 
 lbs = []
 if asg.load_balancers:
   lbs = awselb.get_all_load_balancers(asg.load_balancers)
 
-# check cross-zone load balancing - warn if empty AZ will deadend requests
-for lb in lbs:
-  if lb.is_cross_zone_load_balancing() != True:
-    for azname, count in azcount.items():
-      if count > 0 and count <= 1:
-        print "WARNING: rotation will cause user-facing outages in zone %s" % azname
+#
+# Warn of dangerous things for ops people
+#
 
+if not args.turbo:
+  # check for reduced redundancy in each zone, warn if AZ will empty
+  for azname, count in azcount.items():
+    if count > 0 and count <= args.count:
+      print "WARNING: rotation will temporarily reduce redundancy in zone %s" % azname
+      sys.stdout.flush()
+
+  if len(oldinst) < 2:
+    print "WARNING: single autoscale instance, using accelerated rotation"
+    sys.stdout.flush()
+
+  # check cross-zone load balancing - warn if empty AZ will deadend requests
+  for lb in lbs:
+    if lb.is_cross_zone_load_balancing() != True:
+      for azname, count in azcount.items():
+        if count > 0 and count <= 1:
+          print "WARNING: rotation will cause user-facing outages in zone %s" % azname
+
+#
+# Wait for all instances to register as healthy
+#
+def elb_wait_healthy():
+  global asg
+
+  if verbose:
+    print "%s verifying all ELB instances healthy" % asg.name
+    sys.stdout.flush()
+  healthy = False
+  while not healthy:
+    healthycnt = 0
+    healthyneed = 0
+    lbs = []
+    if asg.load_balancers:
+      lbs = awselb.get_all_load_balancers(asg.load_balancers)
+    for lb in lbs:
+      healths = awselb.describe_instance_health(lb.name)
+      healthyneed += len(healths)
+      for h in healths:
+        if h.state == u'InService':
+          healthycnt += 1
+    if healthycnt == healthyneed:
+      healthy = True
+
+    # sleep a few
+    if healthy != True:
+      time.sleep(args.sleep)
+
+  return
+
+#
+# Wait for instance to register to ELB
+#
+def elb_wait_registered(inst):
+  global asg
+
+  if verbose:
+    print "%s %s waiting for ELB registration" % (args.group, inst)
+    sys.stdout.flush()
+  healthy = False
+  while not healthy:
+    healthycnt = 0
+    lbs = []
+    if asg.load_balancers:
+      lbs = awselb.get_all_load_balancers(asg.load_balancers)
+    for lb in lbs:
+      healths = awselb.describe_instance_health(lb.name, [inst])
+      for h in healths:
+        if h.state == u'InService':
+          healthycnt += 1
+    if healthycnt == len(lbs):
+      healthy = True
+
+    # sleep a few
+    if healthy != True:
+      time.sleep(args.sleep)
+
+  return
+
+#
+# Turbo mode rotation - double, then half
+#
+if args.turbo:
+  print "%s engaging TURBO rotation of %d -> %d hosts" % (args.group, len(oldinst), capacity * 2)
+  sys.stdout.flush()
+
+  if asg.max_size < (capacity * 2):
+    print "%s overriding max_size from %d -> %d instances" % (args.group, asg.max_size, capacity * 2)
+    asg.max_size = capacity * 2
+
+  # set desired capacity to double
+  asg.desired_capacity = capacity * 2
+  asg.update()
+
+  # wait for instances to start
+  if verbose:
+    print "%s waiting for autoscale instances to reach %d" % (args.group, asg.desired_capacity)
+    sys.stdout.flush()
+  healthy = False
+  while not healthy:
+    healthycnt = 0
+    asg = awsasg.get_all_groups([args.group])[0]
+    for i in asg.instances:
+      if i.lifecycle_state == u'InService':
+        healthycnt += 1
+      if i.instance_id not in oldinst and i.instance_id not in newinst:
+        newinst.append(i.instance_id)
+        thisnewinst = i.instance_id
+        if verbose:
+          print "%s %s is %s" % (args.group, i.instance_id, str(i.lifecycle_state))
+          sys.stdout.flush()
+        else:
+          print "%s" % i.instance_id
+          sys.stdout.flush()
+    if healthycnt >= asg.desired_capacity:
+      healthy = True
+
+    # sleep a few
+    if healthy != True:
+      time.sleep(args.sleep)
+
+  # wait for all instances in the autoscale group to register healthy
+  elb_wait_healthy()
+
+  # remove old from ELB
+  elbsleep = 0
+  for i in oldinst:
+    for lb in lbs:
+      if verbose:
+        print "%s %s removing from ELB %s" % (asg.name, i, lb.name)
+        sys.stdout.flush()
+      try:
+        awselb.deregister_instances(lb.name, i)
+      except boto.exception.BotoServerError:
+        print "%s FAILED deregistering %s from %s" % (asg.name, i, lb.name)
+        sys.stdout.flush()
+      elbsleep = max(elbsleep, lb.health_check.interval * lb.health_check.healthy_threshold)
+  if verbose:
+    print "%s waiting %d seconds for ELB deregistration" % (args.group, elbsleep)
+    sys.stdout.flush()
+  time.sleep(elbsleep)
+
+  # terminate old
+  for i in oldinst:
+    if verbose:
+      print "%s %s autoscale terminating" % (args.group, i)
+      sys.stdout.flush()
+    try:
+      awsasg.terminate_instance(i, decrement_capacity=True)
+    except boto.exception.BotoServerError:
+      print "%s FAILED terminating %s" % (args.group, i)
+      sys.stdout.flush()
+
+  # reduce desired capacity
+  if verbose:
+    print "%s returning desired capacity from %d -> %d instances" % (args.group, capacity * 2, capacity)
+  asg.desired_capacity = capacity
+  asg.update()
+
+  # return max_size if touched
+  if asg.max_size != asgmaxsize:
+    if verbose:
+      print "%s returning max_size from %d -> %d instances" % (args.group, asg.max_size, asgmaxsize)
+    asg.max_size = asgmaxsize
+    asg.update()
+
+  # Turbo rotation stops here
+  sys.exit(0)
+
+#
+# Standard mode rotation - terminate and wait for new instance to come InService
+#
 for thisinst in oldinst:
   thisnewinst = None
 
@@ -142,7 +305,7 @@ for thisinst in oldinst:
     print "%s waiting for autoscale instance" % args.group
     sys.stdout.flush()
   healthy = False
-  while healthy == False:
+  while not healthy:
     healthycnt = 0
     asg = awsasg.get_all_groups([args.group])[0]
     for i in asg.instances:
@@ -165,48 +328,8 @@ for thisinst in oldinst:
     if healthy != True:
       time.sleep(args.sleep)
 
-  # wait for instance health to be InService
-  if verbose:
-    print "%s %s waiting for ELB registration" % (args.group, thisnewinst)
-    sys.stdout.flush()
-  healthy = False
-  while healthy == False:
-    healthycnt = 0
-    lbs = []
-    if asg.load_balancers:
-      lbs = awselb.get_all_load_balancers(asg.load_balancers)
-    for lb in lbs:
-      healths = awselb.describe_instance_health(lb.name, [thisnewinst])
-      for h in healths:
-        if h.state == u'InService':
-          healthycnt += 1
-    if healthycnt == len(lbs):
-      healthy = True
+  # wait for new instance to register to the ELB
+  elb_wait_registered(thisnewinst)
 
-    # sleep a few
-    if healthy != True:
-      time.sleep(args.sleep)
-
-  # wait for all instances to be healthy, just in case
-  if verbose:
-    print "%s verifying all ELB instances healthy" % asg.name
-    sys.stdout.flush()
-  healthy = False
-  while healthy == False:
-    healthycnt = 0
-    healthyneed = 0
-    lbs = []
-    if asg.load_balancers:
-      lbs = awselb.get_all_load_balancers(asg.load_balancers)
-    for lb in lbs:
-      healths = awselb.describe_instance_health(lb.name)
-      healthyneed += len(healths)
-      for h in healths:
-        if h.state == u'InService':
-          healthycnt += 1
-    if healthycnt == healthyneed:
-      healthy = True
-
-    # sleep a few
-    if healthy != True:
-      time.sleep(args.sleep)
+  # wait for all instances in the autoscale group to register healthy
+  elb_wait_healthy()
