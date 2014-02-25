@@ -28,6 +28,7 @@
 import argparse
 import boto
 import boto.ec2
+import boto.ec2.autoscale
 import filecmp
 import os
 import sys
@@ -36,6 +37,7 @@ import tempfile
 envtag = 'env'
 svctag = 'service'
 clutag = 'cluster'
+autoscalegroup = None
 
 aws_key = None
 aws_secret = None
@@ -46,6 +48,8 @@ if 'AWS_SECRET_KEY' in os.environ:
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-a", "--auto", help="auto-detect (env,service,cluster)",
+    action="store_true")
+parser.add_argument("-A", "--autoscalegroup", help="use autoscaling host list",
     action="store_true")
 parser.add_argument("-e", "--environ", help="environment tag")
 parser.add_argument("-s", "--service", help="service tag")
@@ -81,6 +85,10 @@ if args.auto == True:
       tagfilter['tag:%s' % clutag] = t.value
       if args.verbose:
         print "Autodiscovery: cluster %s" % t.value
+    elif t.name == 'aws:autoscaling:groupName':
+      autoscalegroup = t.value
+      if args.verbose:
+        print "Autodiscovery: autoscalegroup %s" % t.value
 
 # Command-line args replace autodiscovery
 if args.environ != None:
@@ -90,8 +98,30 @@ if args.service != None:
 if args.cluster != None:
   tagfilter['tag:%s' % clutag] = args.cluster
 
-# Search for tagged instances
-running = awsec2.get_all_instances(filters=tagfilter)
+if args.autoscalegroup:
+  # Use autoscalegroup name to get instances in stack order
+  awsasg = boto.connect_autoscale(aws_access_key_id=aws_key,
+      aws_secret_access_key=aws_secret)
+  if not autoscalegroup:
+    autoscalegroup = tagfilter['tag:%s' % svctag]
+  asgs = awsasg.get_all_groups(names=[autoscalegroup])
+  asg = None
+  asginsts = []
+  running = []
+  if len(asgs) > 0:
+    asg = asgs[0]
+    for i in asg.instances:
+      asginsts.append(i.instance_id)
+    # Search for instances in autoscale order
+    apiorder = awsec2.get_all_instances(instance_ids=asginsts)
+    for a in asg.instances:
+      for inst in apiorder:
+        for i in inst.instances:
+          if i.id == a.instance_id:
+            running.append(inst)
+else:
+  # Search for tagged instances
+  running = awsec2.get_all_instances(filters=tagfilter)
 
 # Open temp file after all api work is done
 if args.filename != None:
