@@ -103,7 +103,8 @@ if args.autoscalegroup:
   awsasg = boto.connect_autoscale(aws_access_key_id=aws_key,
       aws_secret_access_key=aws_secret)
   if not autoscalegroup:
-    autoscalegroup = tagfilter['tag:%s' % svctag]
+    autoscalegroup = "%s-%s" % (tagfilter['tag:%s' % svctag],
+        tagfilter['tag:%s' % envtag])
   asgs = awsasg.get_all_groups(names=[autoscalegroup])
   asg = None
   asginsts = []
