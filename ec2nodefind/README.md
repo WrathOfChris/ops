@@ -16,6 +16,7 @@ a list of current running hosts.
 
 ## OPTIONS
 * **-a** enable autodiscovery from instance metadata of (environ, service, cluster)
+* **-A** use autoscalegroup for instance ordering
 * **-i** print IP addresses instead of hostnames
 * **-p** print public hostname or IP address instead of private
 * **-v** be verbose
@@ -36,7 +37,8 @@ any EC2 resource.
     "Statement": [
       {
         "Action": [
-          "ec2:Describe*"
+          "ec2:Describe*",
+          "autoscaling:DescribeAutoScalingGroups"
         ],
         "Resource": [
           "*"
