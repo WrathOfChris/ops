@@ -1,0 +1,68 @@
+#!/usr/bin/python
+#
+# Copyright (c) 2013 Chris Maxwell <chris@wrathofchris.com>
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Thanks to Mahesh Paolini-Subramanya (@dieswaytoofast) for his help
+#
+import argparse
+import datetime
+import os
+import pyrax
+import sys
+
+rax_creds_file = os.path.expanduser("~/.rackspace_cloud_credentials")
+if 'RAX_CREDS_FILE' in os.environ:
+  rax_creds_file = os.path.expanduser(os.environ['RAX_CREDS_FILE'])
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
+parser.add_argument("-r", "--region", help="region")
+parser.add_argument("-e", "--environ", help="environment tag")
+parser.add_argument("-s", "--service", help="service tag")
+parser.add_argument("-n", "--name", help="image name")
+parser.add_argument("-w", "--wait", help="wait for completion")
+parser.add_argument("instance", help="instance id")
+args = parser.parse_args()
+
+if not args.name:
+  if not args.service or not args.environ:
+    parser.print_help()
+    sys.exit(1)
+  image_name = "%s-%s-%s" % (args.environ, args.service,
+      datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S'))
+else:
+  image_name = args.name
+
+pyrax.set_setting("identity_type", "rackspace")
+pyrax.set_credential_file(rax_creds_file)
+cs = pyrax.cloudservers
+
+image_id = cs.servers.create_image(args.instance, image_name)
+if not image_id:
+  sys.exit(1)
+print image_id
+if args.wait:
+  pyrax.utils.wait_until(image_id, "status", ["ACTIVE", "ERROR"])
