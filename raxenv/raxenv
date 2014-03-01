@@ -1,0 +1,57 @@
+#!/bin/bash -i
+#
+# Run this as:
+#
+#   eval `raxenv username`
+#
+RAXUSER=$1
+
+# RAX_USERNAME RAX_ACCOUNT RAX_APIKEY
+if [ -f ~/.rax/user-$RAXUSER ]; then
+  . ~/.rax/user-$RAXUSER
+else
+  echo "ERROR - no such user file ~/.rax/user-$RAXUSER"
+  exit 1
+fi
+
+if echo "$PS1" | grep "^rax-" >/dev/null ; then
+  PS1=`echo "$PS1" | cut -d: -f 2-`
+fi
+
+PS1="rax-${RAXUSER}:${PS1}"
+RAX_CREDS_FILE="${HOME}/.rax/rax-${RAXUSER}"
+OS_AUTH_URL=https://identity.api.rackspacecloud.com/v2.0/
+OS_AUTH_SYSTEM=rackspace
+if [ -n "$RAX_REGION" ]; then
+    OS_REGION_NAME=$RAX_REGION
+fi
+OS_USERNAME=$RAX_USERNAME
+OS_TENANT_NAME=$RAX_ACCOUNT
+NOVA_RAX_AUTH=1
+OS_PASSWORD=$RAX_APIKEY
+#OS_PROJECT_ID=<tenant_id>
+OS_NO_CACHE=1
+export PS1 RAX_REGION RAX_CREDS_FILE OS_AUTH_URL OS_AUTH_SYTEM OS_REGION_NAME
+export OS_USERNAME OS_TENANT_NAME NOVA_RAX_AUTH OS_PASSWORD OS_NO_CACHE
+
+cat >~/.rax/rax-${RAXUSER} <<__EOT
+# $RAXUSER
+[rackspace_cloud]
+username = $RAX_USERNAME
+api_key = $RAX_APIKEY
+__EOT
+
+cat <<__EOT
+RAXUSER="$RAXUSER"
+RAX_CREDS_FILE="${HOME}/.rax/rax-${RAXUSER}"
+PS1="$PS1"
+RAX_REGION="$RAX_REGION"
+OS_AUTH_URL="$OS_AUTH_URL"
+OS_AUTH_SYTEM="$OS_AUTH_SYTEM"
+OS_REGION_NAME="$OS_REGION_NAME"
+OS_USERNAME="$OS_USERNAME"
+OS_TENANT_NAME="$OS_TENANT_NAME"
+NOVA_RAX_AUTH="$NOVA_RAX_AUTH"
+OS_PASSWORD="$OS_PASSWORD"
+OS_NO_CACHE="$OS_NO_CACHE"
+__EOT
