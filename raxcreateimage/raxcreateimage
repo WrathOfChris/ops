@@ -43,7 +43,8 @@ parser.add_argument("-r", "--region", help="region")
 parser.add_argument("-e", "--environ", help="environment tag")
 parser.add_argument("-s", "--service", help="service tag")
 parser.add_argument("-n", "--name", help="image name")
-parser.add_argument("-w", "--wait", help="wait for completion")
+parser.add_argument("-w", "--wait", help="wait for completion",
+    action="store_true")
 parser.add_argument("instance", help="instance id")
 args = parser.parse_args()
 
