@@ -43,8 +43,6 @@ parser.add_argument("-r", "--region", help="region")
 parser.add_argument("-e", "--environ", help="environment tag")
 parser.add_argument("-s", "--service", help="service tag")
 parser.add_argument("-n", "--name", help="image name")
-parser.add_argument("-w", "--wait", help="wait for completion",
-    action="store_true")
 parser.add_argument("instance", help="instance id")
 args = parser.parse_args()
 
@@ -65,5 +63,3 @@ image_id = cs.servers.create_image(args.instance, image_name)
 if not image_id:
   sys.exit(1)
 print image_id
-if args.wait:
-  pyrax.utils.wait_until(image_id, "status", ["ACTIVE", "ERROR"])
