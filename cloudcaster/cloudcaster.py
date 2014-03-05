@@ -330,7 +330,7 @@ for app in conf['apps']:
       p_prot = 'tcp'
     rule = find_sg_rule_group(elb_sg.id, elb_sg.owner_id, p_from, p_to, p_prot, sg.rules)
     if rule == None:
-      print "Creating SG rule for ELB -> SG"
+      print "Creating SG rule for ELB -> SG ( %s, %s )" % ( elb['name'], sg.name )
       if awsec2.authorize_security_group(group_id = sg.id,
             src_security_group_group_id = elb_sg.id,
             ip_protocol = p_prot,
@@ -374,30 +374,64 @@ for app in conf['apps']:
   # APP:ALLOW rules
   if 'allow' in app:
     for allow in app['allow']:
-      allowsg = find_sg(allow['group'], sgs)
-      p_from = allow['from']
-      p_to = allow['to']
-      p_prot = allow['prot']
-      if p_prot != 'udp' and p_prot != 'icmp':
-        p_prot = 'tcp'
+        cidr = allow.get('cidr', None)
+        group = allow.get('group', None)
 
-      # ALLOW another APP in
-      rule = find_sg_rule_group(allowsg.id, allowsg.owner_id, p_from, p_to, p_prot, sg.rules)
-      if rule == None:
-        print "Creating SG rule for ALLOWSG -> SG (%s, %s, %s)" % (p_from, p_to, p_prot)
-        if awsec2.authorize_security_group(group_id = sg.id,
-              src_security_group_group_id = allowsg.id,
-              ip_protocol = p_prot,
-              from_port = p_from,
-              to_port = p_to
-            ) != True:
-          print "Failed authorizing ALLOWSG->SG"
-          sys.exit(1)
-        sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-        sg = find_sg(app['group'], sgs)
-        rule = find_sg_rule_group(allowsg.id, allowsg.owner_id, p_from, p_to, p_prot, sg.rules)
-      if verbose:
-        print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+        if cidr != None and group != None:
+            print "CIDR and group defined:"
+            pprint(allow)
+            sys.exit(2)
+        elif cidr == None and group == None:
+            print "Neither CIDR or group defined!:"
+            pprint(allow)
+            sys.exit(2)
+
+        p_from = allow['from']
+        p_to = allow['to']
+        p_prot = allow['prot']
+
+        if p_prot != 'udp' and p_prot != 'icmp':
+            p_prot = 'tcp'
+
+        # ALLOW another APP in
+        if cidr != None:
+            rule = find_sg_rule_cidr(cidr, p_from, p_to, p_prot, sg.rules)
+        elif group != None:
+            allowsg = find_sg(group, sgs)
+            rule = find_sg_rule_group(allowsg.id, allowsg.owner_id, p_from, p_to, p_prot, sg.rules)
+
+        if rule == None:
+            # Packed keyword arguments
+            kwargs = {
+                    "group_id": sg.id,
+                    "ip_protocol": p_prot,
+                    "from_port": p_from,
+                    "to_port": p_to
+                    }
+
+            if cidr != None:
+                kwargs['cidr_ip'] = cidr
+                print "Creating SG rule for ALLOWSG -> CIDR (%s, %s, %s, %s)" % (cidr, p_from, p_to, p_prot)
+            elif group != None:
+                print "Creating SG rule for ALLOWSG -> SG (%s, %s, %s, %s)" % (group, p_from, p_to, p_prot)
+                kwargs['src_security_group_group_id'] = allowsg.id
+
+            if awsec2.authorize_security_group(**kwargs) != True:
+                    print "Failed authorizing ALLOWSG-> (CIDR or SG)"
+                    pprint(allow)
+                    sys.exit(1)
+
+            sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+            sg = find_sg(app['group'], sgs)
+
+            if cidr != None:
+                rule = find_sg_rule_cidr(cidr, p_from, p_to, p_prot, sg.rules)
+            elif group != None:
+                rule = find_sg_rule_group(allowsg.id, allowsg.owner_id, p_from, p_to, p_prot, sg.rules)
+            if verbose and cidr != None:
+                print "SGRULE %s src %s %s %s:%s" % (cidr, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+            elif verbose and group != None:
+                print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
 
   # APP:PUBLIC rules
   if 'pubports' in app:
@@ -467,33 +501,72 @@ for app in conf['apps']:
 # ELB ALLOW RULES - after APP for SG creation
 #
 for elb in conf['elbs']:
-  if 'allow' in elb:
-    elb_sg = find_sg(elb['group'], sgs)
-    for allow in elb['allow']:
-      allowsg = find_sg(allow['group'], sgs)
-      p_from = allow['from']
-      p_to = allow['to']
-      p_prot = allow['prot']
-      if p_prot != 'udp' and p_prot != 'icmp':
-        p_prot = 'tcp'
-
-      # ALLOW APP to ELB
-      rule = find_sg_rule_group(allowsg.id, allowsg.owner_id, p_from, p_to, p_prot, elb_sg.rules)
-      if rule == None:
-        print "Creating SG rule for ALLOWSG -> ELB (%s, %s, %s)" % (p_from, p_to, p_prot)
-        if awsec2.authorize_security_group(group_id = elb_sg.id,
-              src_security_group_group_id = allowsg.id,
-              ip_protocol = p_prot,
-              from_port = p_from,
-              to_port = p_to
-            ) != True:
-          print "Failed authorizing ALLOWSG->ELB"
-          sys.exit(1)
-        sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+    if 'allow' in elb:
         elb_sg = find_sg(elb['group'], sgs)
-        rule = find_sg_rule_group(allowsg.id, allowsg.owner_id, p_from, p_to, p_prot, elb_sg.rules)
-      if verbose:
-        print "SGRULE %s src %s %s %s:%s" % (elb_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+        for allow in elb['allow']:
+            cidr = allow.get('cidr', None)
+            group = allow.get('group', None)
+
+            if cidr != None and group != None:
+                print "CIDR and group defined:"
+                pprint(allow)
+                sys.exit(2)
+            elif cidr == None and group == None:
+                print "Neither CIDR nor group defined!"
+                pprint(allow)
+                sys.exit(2)
+
+            p_from = allow['from']
+            p_to = allow['to']
+            p_prot = allow['prot']
+
+            if p_prot != 'udp' and p_prot != 'icmp':
+               p_prot = 'tcp'
+
+
+            # ALLOW APP to ELB
+            if cidr != None:
+                rule = find_sg_rule_cidr(cidr, p_from, p_to, p_prot, elb_sg.rules)
+            elif group != None:
+                allowsg = find_sg(allow['group'], sgs)
+                rule = find_sg_rule_group(allowsg.id, allowsg.owner_id, p_from, p_to, p_prot, elb_sg.rules)
+            else:
+                print "No CIDR or rule found?"
+                sys.exit(2)
+
+            if rule == None:
+                # Pack keyword arguments, then decide if 
+                kwargs = {
+                        "group_id": elb_sg.id,
+                        "ip_protocol": p_prot,
+                        "from_port": p_from,
+                        "to_port": p_to
+                        }
+
+                if cidr != None:
+                    kwargs['cidr_ip'] = cidr
+                elif group != None:
+                    kwargs['src_security_group_group_id'] = allowsg.id,
+
+                if cidr != None:
+                    print "Creating SG rule for ALLOWCIDR -> ELB (%s, %s, %s, %s)" % (cidr,p_from, p_to, p_prot)
+                elif group != None:
+                    print "Creating SG rule for ALLOWSG -> ELB (%s, %s, %s, %s)" % (allowsg.name, p_from, p_to, p_prot)
+                if awsec2.authorize_security_group(**kwargs) != True:
+                    print "Failed authorizing ALLOW(SG|CIDR)->ELB"
+                    sys.exit(1)
+
+                sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+                elb_sg = find_sg(elb['group'], sgs)
+                if cidr != None:
+                    rule = find_sg_rule_cidr(cidr, p_from, p_to, p_prot, elb_sg.rules)
+                elif group != None:
+                    rule = find_sg_rule_group(allowsg.id, allowsg.owner_id, p_from, p_to, p_prot, elb_sg.rules)
+                else:
+                    print "No CIDR or SG rule found?"
+                    sys.exit(2)
+                if verbose:
+                    print "SGRULE %s src %s %s %s:%s" % (elb_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
 
 #
 # IAM Certificate for SSL
