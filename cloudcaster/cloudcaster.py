@@ -537,7 +537,7 @@ for elb in conf['elbs']:
             if rule == None:
                 # Pack keyword arguments, then decide if 
                 kwargs = {
-                        "group_id": elb_sg.id,
+                        "group_id": str(elb_sg.id),
                         "ip_protocol": p_prot,
                         "from_port": p_from,
                         "to_port": p_to
@@ -546,7 +546,7 @@ for elb in conf['elbs']:
                 if cidr != None:
                     kwargs['cidr_ip'] = cidr
                 elif group != None:
-                    kwargs['src_security_group_group_id'] = allowsg.id,
+                    kwargs['src_security_group_group_id'] = str(allowsg.id)
 
                 if cidr != None:
                     print "Creating SG rule for ALLOWCIDR -> ELB (%s, %s, %s, %s)" % (cidr,p_from, p_to, p_prot)
