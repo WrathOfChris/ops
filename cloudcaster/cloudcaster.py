@@ -738,7 +738,8 @@ for app in conf['apps']:
             sorted(amis, key=lambda a: a.name, reverse=True))
     if ami != None:
       app['ami'] = ami.id
-      print "AMI mapping %s to %s %s (%s)" % (app['aminame'], ami.id, ami.name, ami.description)
+      if verbose:
+        print "AMI mapping %s to %s %s (%s)" % (app['aminame'], ami.id, ami.name, ami.description)
     else:
       print "AMI mapping failed for \"%s\" as %s-%s-*, all-%s-*, %s" % (app['aminame'], conf['aws']['env'], app['aminame'], app['aminame'], app['aminame'])
 
@@ -753,13 +754,21 @@ for app in conf['apps']:
     running = awsec2.get_all_instances(filters=tagfilter)
     for r in running:
       for i in r.instances:
-        if i.image_id != app['ami']:
-          print "APP-INST %s %s ami %s != %s" % (app['name'], i.id, i.image_id, app['ami'])
+        if 'ami' not in app:
+          print "APP-INST %s %s ami %s NOT MAPPED" % (app['name'], i.id, i.image_id)
+        else:
+          if i.image_id != app['ami']:
+            print "APP-INST %s %s ami %s != %s" % (app['name'], i.id, i.image_id, app['ami'])
         if i.instance_type != app['type']:
           print "APP-INST %s %s type %s != %s" % (app['name'], i.id, i.instance_profile, app['role'])
         if verbose:
           print "APP-INST %s %s ami %s type %s host %s %s" % (app['name'], i.id, i.image_id, i.instance_type, i.private_dns_name, i.public_dns_name)
     sg = find_sg(app['group'], sgs)
+
+    # error if we need more instances but have no AMI mapping
+    if 'ami' not in app and app['count'] < len(running):
+        print "ERROR: APP-INST %s running %d < %d instances with no AMI mapped" % (app['name'])
+        sys.exit(1)
 
     mapping = None
     if app['type'] in bdmapping:
@@ -878,6 +887,9 @@ for app in conf['apps']:
       print "APP-LAUNCH %s type %s != %s" % (lc.name, lc.instance_type, app['type'])
       lc = None
     if lc == None:
+      if 'ami' not in app:
+          print "ERROR: APP-LAUNCH %s cannot create updated LaunchConfig without AMI mapping" % app['name']
+          sys.exit(1)
       if 'public' in app:
         publicip = True
       else:
