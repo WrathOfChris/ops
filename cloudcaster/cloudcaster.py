@@ -235,16 +235,6 @@ for app in conf['apps']:
     print "SECGRP-APP %s %s" % (sg.id, sg.name)
 
 #
-# DEFAULTS
-#
-# Select the first ELB as the default if unspecified
-#
-if len(conf['elbs']) > 0:
-  default_elb = conf['elbs'][0]['name']
-else:
-  default_elb = None
-
-#
 # Security Group Rules
 #
 
@@ -314,36 +304,37 @@ for app in conf['apps']:
   sg = find_sg(app['group'], sgs)
 
   if 'elb' in app:
-    elb = find_elb_conf(app['elb'], conf['elbs'])
-  else:
-    elb = find_elb_conf(default_elb, conf['elbs'])
-  elb_sg = find_sg(elb['group'], sgs)
-  if verbose:
-    print "APP %s ELB %s ELBSG %s" % (app['name'], elb['name'], elb_sg.name)
+        elb = find_elb_conf(app['elb'], conf['elbs'])
+        if not elb:
+            print "ERROR: APP %s ELB %s does not exist" % (app['name'], app['elb'])
+            sys.exit(1)
+        elb_sg = find_sg(elb['group'], sgs)
+        if verbose:
+            print "APP %s ELB %s ELBSG %s" % (app['name'], elb['name'], elb_sg.name)
 
-  # ELB:APP rules
-  for port in elb['listeners']:
-    p_from = port['to']
-    p_to = port['to']
-    p_prot = port['to_prot']
-    if p_prot != 'udp' and p_prot != 'icmp':
-      p_prot = 'tcp'
-    rule = find_sg_rule_group(elb_sg.id, elb_sg.owner_id, p_from, p_to, p_prot, sg.rules)
-    if rule == None:
-      print "Creating SG rule for ELB -> SG ( %s, %s )" % ( elb['name'], sg.name )
-      if awsec2.authorize_security_group(group_id = sg.id,
-            src_security_group_group_id = elb_sg.id,
-            ip_protocol = p_prot,
-            from_port = p_from,
-            to_port = p_to
-          ) != True:
-        print "Failed authorizing ELB->SG"
-        sys.exit(1)
-      sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-      sg = find_sg(app['group'], sgs)
-      rule = find_sg_rule_group(elb_sg.id, elb_sg.owner_id, p_from, p_to, p_prot, sg.rules)
-    if verbose:
-      print "SGRULE %s src %s %s %s:%s" % (elb_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+        # ELB:APP rules
+        for port in elb['listeners']:
+            p_from = port['to']
+            p_to = port['to']
+            p_prot = port['to_prot']
+            if p_prot != 'udp' and p_prot != 'icmp':
+                p_prot = 'tcp'
+            rule = find_sg_rule_group(elb_sg.id, elb_sg.owner_id, p_from, p_to, p_prot, sg.rules)
+            if rule == None:
+                print "Creating SG rule for ELB -> SG ( %s, %s )" % ( elb['name'], sg.name )
+                if awsec2.authorize_security_group(group_id = sg.id,
+                        src_security_group_group_id = elb_sg.id,
+                        ip_protocol = p_prot,
+                        from_port = p_from,
+                        to_port = p_to
+                        ) != True:
+                    print "Failed authorizing ELB->SG"
+                    sys.exit(1)
+                sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+                sg = find_sg(app['group'], sgs)
+                rule = find_sg_rule_group(elb_sg.id, elb_sg.owner_id, p_from, p_to, p_prot, sg.rules)
+            if verbose:
+                print "SGRULE %s src %s %s %s:%s" % (elb_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
 
   # APP:APP rules
   for port in app['ports']:
@@ -747,7 +738,8 @@ for app in conf['apps']:
             sorted(amis, key=lambda a: a.name, reverse=True))
     if ami != None:
       app['ami'] = ami.id
-      print "AMI mapping %s to %s %s (%s)" % (app['aminame'], ami.id, ami.name, ami.description)
+      if verbose:
+        print "AMI mapping %s to %s %s (%s)" % (app['aminame'], ami.id, ami.name, ami.description)
     else:
       print "AMI mapping failed for \"%s\" as %s-%s-*, all-%s-*, %s" % (app['aminame'], conf['aws']['env'], app['aminame'], app['aminame'], app['aminame'])
 
@@ -762,13 +754,21 @@ for app in conf['apps']:
     running = awsec2.get_all_instances(filters=tagfilter)
     for r in running:
       for i in r.instances:
-        if i.image_id != app['ami']:
-          print "APP-INST %s %s ami %s != %s" % (app['name'], i.id, i.image_id, app['ami'])
+        if 'ami' not in app:
+          print "APP-INST %s %s ami %s NOT MAPPED" % (app['name'], i.id, i.image_id)
+        else:
+          if i.image_id != app['ami']:
+            print "APP-INST %s %s ami %s != %s" % (app['name'], i.id, i.image_id, app['ami'])
         if i.instance_type != app['type']:
           print "APP-INST %s %s type %s != %s" % (app['name'], i.id, i.instance_profile, app['role'])
         if verbose:
           print "APP-INST %s %s ami %s type %s host %s %s" % (app['name'], i.id, i.image_id, i.instance_type, i.private_dns_name, i.public_dns_name)
     sg = find_sg(app['group'], sgs)
+
+    # error if we need more instances but have no AMI mapping
+    if 'ami' not in app and app['count'] < len(running):
+        print "ERROR: APP-INST %s running %d < %d instances with no AMI mapped" % (app['name'])
+        sys.exit(1)
 
     mapping = None
     if app['type'] in bdmapping:
@@ -841,8 +841,6 @@ for app in conf['apps']:
       # XXX make this idempotent
       if 'elb' in app:
         running = awselb.register_instances("%s-%s" % (app['elb'], conf['aws']['env']), instances)
-      else:
-        running = awselb.register_instances(default_elb, instances)
 
 #
 # AutoScale
@@ -889,6 +887,9 @@ for app in conf['apps']:
       print "APP-LAUNCH %s type %s != %s" % (lc.name, lc.instance_type, app['type'])
       lc = None
     if lc == None:
+      if 'ami' not in app:
+          print "ERROR: APP-LAUNCH %s cannot create updated LaunchConfig without AMI mapping" % app['name']
+          sys.exit(1)
       if 'public' in app:
         publicip = True
       else:
@@ -947,11 +948,14 @@ for app in conf['apps']:
           return g
       return None
 
+    app_lbname = None
     if 'elb' in app:
-      elb = find_elb_conf(app['elb'], conf['elbs'])
-    else:
-      elb = find_elb_conf(default_elb, conf['elbs'])
-    elb_sg = find_sg(elb['group'], sgs)
+        elb = find_elb_conf(app['elb'], conf['elbs'])
+        if not elb:
+            print "ERROR: APP %s ELB %s does not exist" % (app['name'], app['elb'])
+            sys.exit(1)
+        elb_sg = find_sg(elb['group'], sgs)
+        app_lbname = [ "%s-%s" % (elb['name'], conf['aws']['env']) ]
 
     asgroups = awsasg.get_all_groups()
     if 'public' in app:
@@ -965,7 +969,7 @@ for app in conf['apps']:
           group_name = asgname,
           availability_zones = conf['vpc']['azs'],
           launch_config = lc,
-          load_balancers = [ "%s-%s" % (elb['name'], conf['aws']['env']) ],
+          load_balancers = app_lbname,
           min_size = app['autoscale']['min'],
           max_size = app['autoscale']['max'],
           tags = astags,

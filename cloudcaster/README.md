@@ -128,7 +128,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
   ]
 ```
 
-* **elbs[].name** - global name of the ELB.  This could conflict with ANY other ELB in the account.  Be smart, use environment names.
+* **elbs[].name** - global name of the ELB, postfixed with the environment set globally (ie: -stage).  This could conflict with ANY other ELB in the account.
 * **elbs[].group** - security group name for the ELB hosts.  VPC ELBs now belong to a normal security group, and can be restricted to IP-based ACL.  At present, cloudcaster by default uses 0.0.0.0/0 but may be extended in future to restrict this.
 * **elbs[].internal** - make this ELB and _internal_ ELB for within the VPC only.
 * **elbs[].ports[]** - list of public ports to authorize external access to.  Listeners are not automatically authorized.
@@ -170,7 +170,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 * **apps[].svctag** - service tag for the application.  Should be unique within your account, however it is not enforced.  The tuple (env, service, cluster) should _definitely_ be unique.
 * **apps[].cluster** - cluster name for the application.  Primarily for database clusters to co-exist in the same VPC environment, it allows instances to self-discover cluster members using ops tools such as [ec2nodefine](https://github.com/WrathOfChris/ops/tree/master/ec2nodefind).
 * **apps[].group** - security group for the application.  Unique within the VPC
-* **apps[].elb** - ELB to register the host instance or AutoScaleGroup with.  If absent, the app is registered against the first ELB defined. This will probably lead to unexpected issues.
+* **apps[].elb** - ELB to register the host instance or AutoScaleGroup with.  Does not register if not provided.
 * **apps[].public** - if present, launches the instances into the _public_ subnets of the VPC and assigns external public IP addresses to the instances in addition to the private address.  Required to skip NAT or for public access without a load balancer (ie: UDP).  In general, if hosts can be isolated in private subnets, they should be.
 * **apps[].ami** - the specific ID of an Amazon Machine Image to launch for the application.  Overrides _aminame_.  When modified on an AutoScaleGroup, cloudcaster creates a new launch config then updates the ASG with the new launch config.
 * **apps[].aminame** - search the list of images and return the best match to the name.  Primarily for instances formed with a datestamp attached as -YYYYMMDDHHMMSS.  Matching order is (ENV)-(AMINAME)-(DATESTAMP), all-(AMINAME)-(DATESTAMP), (AMINAME)-(DATESTAMP), (AMINAME).  Reverse-sorted, first match.  The expected operational goal is to allow the newest environment-specific images to supersede the newest all-environment images.  Pinning to a specific older image without using the "ami" parameter is not supported.  On an AutoScaleGroup, when modified, or when a new image is published, cloudcaster will create a new launch config and update the ASG with the new launch config.
