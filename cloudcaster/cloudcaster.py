@@ -34,6 +34,7 @@ import boto.ec2.autoscale
 import boto.ec2.elb
 import boto.route53
 import boto.route53.zone
+import boto.sts
 import boto.vpc
 import datetime
 import json
@@ -76,7 +77,6 @@ awsvpc = boto.vpc.connect_to_region(conf['aws']['region'], aws_access_key_id=aws
 awsec2 = boto.ec2.connect_to_region(conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 awselb = boto.ec2.elb.connect_to_region(conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 awsiam = boto.connect_iam()
-awsr53 = boto.connect_route53()
 awsasg = boto.ec2.autoscale.connect_to_region(conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 
 #
@@ -1335,6 +1335,17 @@ else:
 #
 # ROUTE53
 #
+if 'r53xacct' in conf['aws']:
+    sts = boto.sts.connect_to_region(conf['aws']['region'], aws_access_key_id = aws_key, aws_secret_access_key = aws_secret)
+    tok = sts.assume_role(conf['aws']['r53xacct'], 'cloudcaster')
+    awsr53 = boto.connect_route53(
+            aws_access_key_id = tok.credentials.access_key,
+            aws_secret_access_key = tok.credentials.secret_key,
+            security_token = tok.credentials.session_token
+            )
+else:
+    awsr53 = boto.connect_route53()
+
 zone = awsr53.get_zone(conf['aws']['zone'])
 
 # Route53 - NAT instance
