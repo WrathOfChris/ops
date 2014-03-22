@@ -67,7 +67,9 @@ nat_publicdns = None
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
+parser.add_argument("-n", "--dry-run", help="Dry run, noop mode", action="store_true")
 parser.add_argument("file", help="cloudcaster JSON file")
+
 args = parser.parse_args()
 if args.file == None:
   parser.print_help()
@@ -78,25 +80,10 @@ verbose = args.verbose
 conffile = open(args.file).read()
 conf = json.loads(conffile)
 
-awsvpc = boto.vpc.connect_to_region(conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
-awsec2 = boto.ec2.connect_to_region(conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
-awselb = boto.ec2.elb.connect_to_region(conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
-awsiam = boto.connect_iam()
-awsr53 = boto.connect_route53()
+
 awsasg = boto.ec2.autoscale.connect_to_region(conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 
 lc_groups = {}
-
-# ASG Launch Configuration
-def find_launch(name, ascs):
-  for c in ascs:
-    # Exact match
-    if str(c.name) == name:
-      return c
-    # Regex match env-name-YYYYMMDDHHMMSS
-    if re.match("%s-\d{14}" % name, str(c.name)):
-      return c
-  return None
 
 def extract_lc_names(config):
     match = re.search("(.+)-(\d{14})", config.name)
@@ -105,7 +92,7 @@ def extract_lc_names(config):
         date = time.strptime(match.group(2), "%Y%m%d%H%M%S")
         return [ match.group(1), date ]
 
-def really_get_all_launch_configurations():
+def get_launch_configurations():
   res = []
   lcs = awsasg.get_all_launch_configurations()
   for l in lcs:
@@ -118,31 +105,31 @@ def really_get_all_launch_configurations():
 
   return res
 
-var = {}
+lcname_to_date = {}
 
 def keyitup(entry):
-    name = entry[0]
-    date = entry[1]
-    if name in var:
-        var[name].append(date)
+    lc_name = entry[0]
+    lc_date = entry[1]
+
+    if lc_name in lcname_to_date:
+        lcname_to_date[lc_name].append(lc_date)
     else:
-        var[name] = [ date ]
+        lcname_to_date[lc_name] = [ lc_date ]
 
-lc = really_get_all_launch_configurations()
+lc = get_launch_configurations()
 
-lc_groups = list(map(extract_lc_names, lc))
 
-lc_groups = sorted(lc_groups, key=itemgetter(0,1), reverse=False)
+lc_groups = sorted(list(map(extract_lc_names, lc)), key=itemgetter(0,1), reverse=False)
 
 map(keyitup, lc_groups)
 
-for name in var:
-    count = len(var[name])
+for lc_name in lcname_to_date:
+    count = len(lcname_to_date[lc_name])
     if count > MAX_COUNT:
 
         for i in range(0,count - MAX_COUNT):
-            death = var[name][i]
-            res = awsasg.delete_launch_configuration("%s-%s" % ( name, time.strftime("%Y%m%d%H%M%S",death) ) )
+            death = lcname_to_date[lc_name][i]
+            res = awsasg.delete_launch_configuration("%s-%s" % ( lc_name, time.strftime("%Y%m%d%H%M%S",death) ) )
 
             pp.pprint(res)
 
