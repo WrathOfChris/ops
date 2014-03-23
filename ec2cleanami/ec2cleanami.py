@@ -144,6 +144,7 @@ for app in conf['apps']:
 # if True:
     if verbose:
         print "Checking %s..." % ( app['name'] )
+
     amifilter = { 'name': "%s-%s-*" % (conf['aws']['env'], app['aminame']) }
     amis = awsec2.get_all_images(filters=amifilter)
 
@@ -154,7 +155,7 @@ for app in conf['apps']:
             print "APP %s-%s has 0 entries !!!!" % ( env, app['aminame'] )
             print "Looking through \"all\" ..."
 
-        env = all
+        env = "all"
         amifilter = { 'name': "all-%s-*" % app['aminame'] }
         amis = awsec2.get_all_images(filters=amifilter)
 
@@ -169,12 +170,32 @@ for app in conf['apps']:
             print "Checking %s..." % ( app['name'] )
 
         potential_amis = sorted(list(map(extract_ami_names, amis)), key=itemgetter(1,2), reverse=False)
-        unsafe_amis = []
 
-        # print "--> Found %s of %s-%s" % ( len(potential_amis), env, app['aminame'] )
-        # print "--> Considering %s of %s-%s" % ( len(potential_amis) - MAX_COUNT, env, app['aminame'] )
+        if verbose:
+            for ami in amis:
+                print "--> Found %s of %s-%s" % ( len(potential_amis), env, app['aminame'] )
+                print "--> Considering (probably) %s of %s-%s" % ( len(potential_amis) - MAX_COUNT, env, app['aminame'] )
 
         y = map( return_amiid, potential_amis )
         z = map( return_lc_imageid, lcs)
 
-        pp.pprint( set(y).difference(set(z)))
+        leftovers = set(y).difference(set(z))
+        if verbose:
+            print "AMI IDs to be potentially removed %s" % ( leftovers)
+
+        instances = awsec2.get_only_instances()
+
+        res = []
+        for instance in instances:
+            res.append(instance.image_id)
+            for l in leftovers:
+                if l == instance.image_id:
+                    print instance
+
+        # pp.pprint(res)
+
+        if len(set(leftovers).intersection(set(res))) > 0:
+            print "AMI IMAGE FOUND STILL IN USE.  ABORT! %s" % ( set(leftovers).intersection(set(res) ) )
+            sys.exit(1)
+
+
