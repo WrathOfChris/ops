@@ -842,6 +842,27 @@ for app in conf['apps']:
       if 'elb' in app:
         running = awselb.register_instances("%s-%s" % (app['elb'], conf['aws']['env']), instances)
 
+    # ElasticIP
+    addr_allocid = None
+    if 'addrs' in app:
+        # Check all addrs, and prefetch instance list again
+        addrs = awsec2.get_all_addresses(app['addrs'])
+        running = awsec2.get_all_instances(filters=tagfilter)
+        for addr in addrs:
+            if addr.association_id == None:
+                for r in running:
+                    for i in r.instances:
+                        for ifce in i.interfaces:
+                            if str(ifce.ipOwnerId) == 'amazon':
+                                print "APP-INST %s allocating static %s" % (i.id, addr.public_ip)
+                                awsec2.associate_address(
+                                        instance_id=i.id,
+                                        allocation_id = addr.allocation_id
+                                        )
+                                # XXX change to identify allocation
+                                # reality is AWS account ID
+                                ifce.ipOwnerId = 'self'
+
 #
 # AutoScale
 #
