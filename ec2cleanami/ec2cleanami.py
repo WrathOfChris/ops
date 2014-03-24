@@ -126,6 +126,12 @@ def find_amibyname(name, amis):
       return a
   return None
 
+def find_amibyid(id, amis):
+    for a in amis:
+        if str(a.id) == id:
+            return a
+    return None
+
 def return_names(ami):
     return { "id": ami[0].id, "name": ami[0].name }
 
@@ -169,33 +175,43 @@ for app in conf['apps']:
         if not verbose:
             print "Checking %s..." % ( app['name'] )
 
+        # List of potential AMIs we can delete
         potential_amis = sorted(list(map(extract_ami_names, amis)), key=itemgetter(1,2), reverse=False)
 
+        # Be very descriptive
         if verbose:
             for ami in amis:
                 print "--> Found %s of %s-%s" % ( len(potential_amis), env, app['aminame'] )
                 print "--> Considering (probably) %s of %s-%s" % ( len(potential_amis) - MAX_COUNT, env, app['aminame'] )
 
+        # Converge just the sets of AMI IDs
         y = map( return_amiid, potential_amis )
         z = map( return_lc_imageid, lcs)
 
         leftovers = set(y).difference(set(z))
-        if verbose:
-            print "AMI IDs to be potentially removed %s" % ( leftovers)
+#        if verbose:
+#            print "AMI IDs to be potentially removed %s" % ( leftovers)
 
+        # Attempt to discover AMIs in use by running instances
         instances = awsec2.get_only_instances()
 
         res = []
         for instance in instances:
-            res.append(instance.image_id)
             for l in leftovers:
                 if l == instance.image_id:
-                    print instance
+                    print "!!! %s still in use by %s:%s" % (l, instance.tags['Name'], instance.id )
+                    res.append(instance.image_id)
 
         # pp.pprint(res)
 
         if len(set(leftovers).intersection(set(res))) > 0:
-            print "AMI IMAGE FOUND STILL IN USE.  ABORT! %s" % ( set(leftovers).intersection(set(res) ) )
-            sys.exit(1)
+            print "!!! AMI IMAGE FOUND STILL IN USE, BUT NOT IN LC!"
+            for image in set(res):
+                print "!!! !!! %s" % ( image )
+                # print find_amibyid(image, sorted(amis, key=lambda a: a.id, reverse=True))
+
+        for image in set(leftovers) - set(res):
+            ami=  find_amibyid(image, sorted(amis, key=lambda a: a.id, reverse=True))
+            print "--> %s:%s" % ( ami.name, ami.id )
 
 
