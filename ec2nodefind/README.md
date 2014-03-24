@@ -25,6 +25,7 @@ a list of current running hosts.
 * **-s service** specify service name
 * **-c cluster** specify cluster selector
 * **-f file** output file.  If not specified, writes to _STDOUT_
+* **-r region** specify region.  defaults to us-east-1 unless auto.
 
 ## AUTODISCOVERY
 Autodiscovery relies on an instance-profile role allowing the host to Describe

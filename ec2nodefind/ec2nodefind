@@ -29,6 +29,7 @@ import argparse
 import boto
 import boto.ec2
 import boto.ec2.autoscale
+import boto.utils
 import filecmp
 import os
 import sys
@@ -60,9 +61,18 @@ parser.add_argument("-p", "--public", help="print public address/FQDN",
     action="store_true")
 parser.add_argument("-v", "--verbose", help="be verbose", action="store_true")
 parser.add_argument("-f", "--filename", help="file to write")
+parser.add_argument("-r", "--region", help="ec2 region")
 args = parser.parse_args()
 
-awsec2 = boto.connect_ec2(aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
+if not args.region:
+    if args.auto:
+        identity = boto.utils.get_instance_identity()
+        args.region = identity['document']['region']
+    else:
+        args.region = 'us-east-1'
+
+awsec2 = boto.ec2.connect_to_region(args.region, aws_access_key_id=aws_key,
+        aws_secret_access_key=aws_secret)
 tagfilter = { 'instance-state-name': 'running',
   'tag:%s' % svctag: args.service
 }
