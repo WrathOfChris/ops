@@ -110,8 +110,8 @@ if args.cluster != None:
 
 if args.autoscalegroup:
   # Use autoscalegroup name to get instances in stack order
-  awsasg = boto.connect_autoscale(aws_access_key_id=aws_key,
-      aws_secret_access_key=aws_secret)
+  awsasg = boto.autoscale.connect_to_region(args.region,
+          aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
   if not autoscalegroup:
     autoscalegroup = "%s-%s" % (tagfilter['tag:%s' % svctag],
         tagfilter['tag:%s' % envtag])
