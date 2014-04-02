@@ -273,6 +273,7 @@ for app in conf['apps']:
 
   # Find ELB if requested
   elb = None
+  app_lbname = None
   if 'elb' in app:
     elbconf = find_elb_conf(app['elb'], conf['elbs'])
     if elbconf != None:
@@ -280,6 +281,7 @@ for app in conf['apps']:
     else:
       elbs = awselb.get_all_load_balancers(app['elb'])
     elb = elbs[0]
+    app_lbname = [ elb.name ]
 
   asgroups = awsasg.get_all_groups(names=[asgname])
   if 'public' in app:
@@ -293,7 +295,7 @@ for app in conf['apps']:
         group_name = asgname,
         availability_zones = conf['vpc']['azs'],
         launch_config = lc,
-        load_balancers = [ elb.name ],
+        load_balancers = app_lbname,
         min_size = app['autoscale']['min'],
         max_size = app['autoscale']['max'],
         tags = astags,
