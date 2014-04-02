@@ -1020,9 +1020,13 @@ for app in conf['apps']:
       ag.max_size = app['autoscale']['max']
       ag_update = 1
     if ag.desired_capacity != None and 'count' in app and ag.desired_capacity != app['count']:
-      print "Updating Autoscaling Group capacity %d -> %d" % (ag.desired_capacity, app['count'])
-      ag.desired_capacity = app['count']
-      ag_update = 1
+        if ag.desired_capacity > app['count']:
+            print "WARNING: not decrementing autoscale group %s from %d -> %d" % (
+                    app['name'], ag.desired_capacity, app['count'])
+        else:
+            print "Updating Autoscaling Group capacity %d -> %d" % (ag.desired_capacity, app['count'])
+            ag.desired_capacity = app['count']
+            ag_update = 1
     if ag_update == 1:
       req = ag.update()
 
