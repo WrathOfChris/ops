@@ -77,7 +77,6 @@ if verbose:
 asg = awsasg.get_all_groups([args.group])[0]
 
 capacity = asg.desired_capacity
-asgmaxsize = asg.max_size
 
 if verbose:
   print "%s rotating %i instances" % (args.group, len(asg.instances))
@@ -103,11 +102,12 @@ if asg.load_balancers:
 if not args.turbo:
   # check for reduced redundancy in each zone, warn if AZ will empty
   for azname, count in azcount.items():
-    if count > 0 and count <= args.count:
+    if count > 0 and count <= args.count and \
+            asg.max_size <= asg.desired_capacity:
       print "WARNING: rotation will temporarily reduce redundancy in zone %s" % azname
       sys.stdout.flush()
 
-  if len(oldinst) < 2:
+  if len(oldinst) < 2 and asg.max_size <= asg.desired_capacity:
     print "WARNING: single autoscale instance, using accelerated rotation"
     sys.stdout.flush()
 
@@ -178,6 +178,32 @@ def elb_wait_registered(inst):
 
   return
 
+def asg_remove_instance(instance, elbwait=True, decrement=False):
+    # remove instance from ELB
+    elbsleep = 0
+    for lb in lbs:
+        if verbose:
+            print "%s %s removing from ELB %s" % (asg.name, instance, lb.name)
+            sys.stdout.flush()
+        awselb.deregister_instances(lb.name, instance)
+        elbsleep = max(elbsleep,
+                lb.health_check.interval * lb.health_check.healthy_threshold)
+
+    # only sleep if this is a controlled rotation
+    if elbwait:
+        if verbose:
+            print "%s %s waiting %d seconds for ELB deregistration" % (
+                    args.group, instance, elbsleep)
+            sys.stdout.flush()
+        time.sleep(elbsleep)
+
+    # remove instance from ASG
+    if verbose:
+        print "%s %s autoscale terminating" % (args.group, instance)
+        sys.stdout.flush()
+    awsasg.terminate_instance(instance, decrement_capacity=decrement)
+    return
+
 #
 # Turbo mode rotation - double, then half
 #
@@ -186,8 +212,8 @@ if args.turbo:
   sys.stdout.flush()
 
   if asg.max_size < (capacity * 2):
-    print "%s overriding max_size from %d -> %d instances" % (args.group, asg.max_size, capacity * 2)
-    asg.max_size = capacity * 2
+      print "%s cannot use TURBO rotation, max size is %d but need %d" % (args.group, asg.max_size, capacity * 2)
+      sys.exit(1)
 
   # set desired capacity to double
   asg.desired_capacity = capacity * 2
@@ -258,19 +284,16 @@ if args.turbo:
   asg.desired_capacity = capacity
   asg.update()
 
-  # return max_size if touched
-  if asg.max_size != asgmaxsize:
-    if verbose:
-      print "%s returning max_size from %d -> %d instances" % (args.group, asg.max_size, asgmaxsize)
-    asg.max_size = asgmaxsize
-    asg.update()
-
   # Turbo rotation stops here
   sys.exit(0)
 
 #
 # Standard mode rotation - terminate and wait for new instance to come InService
 #
+startfirst = False
+if asg.max_size > asg.desired_capacity:
+    startfirst = True
+
 for thisinst in oldinst:
   thisnewinst = None
 
@@ -279,26 +302,17 @@ for thisinst in oldinst:
     print "%s rotating %s ->" % (args.group, thisinst),
     sys.stdout.flush()
 
-  # remove instance from ELB
-  elbsleep = 0
-  for lb in lbs:
-    if verbose:
-      print "%s %s removing from ELB %s" % (asg.name, thisinst, lb.name)
-      sys.stdout.flush()
-    awselb.deregister_instances(lb.name, thisinst)
-    elbsleep = max(elbsleep, lb.health_check.interval * lb.health_check.healthy_threshold)
   # only sleep if this is a controlled rotation
+  elbwait = True
   if len(oldinst) > 1:
-    if verbose:
-      print "%s %s waiting %d seconds for ELB deregistration" % (args.group, thisinst, elbsleep)
-      sys.stdout.flush()
-    time.sleep(elbsleep)
+      elbwait = False
 
-  # remove instance from ASG
-  if verbose:
-    print "%s %s autoscale terminating" % (args.group, thisinst)
-    sys.stdout.flush()
-  awsasg.terminate_instance(thisinst, decrement_capacity=False)
+  if startfirst:
+      asg = awsasg.get_all_groups([args.group])[0]
+      asg.desired_capacity += 1
+      asg.update()
+  else:
+      asg_remove_instance(thisinst, elbwait, False)
 
   # wait for ASG to start new instance
   if verbose:
@@ -333,3 +347,6 @@ for thisinst in oldinst:
 
   # wait for all instances in the autoscale group to register healthy
   elb_wait_healthy()
+
+  if startfirst:
+      asg_remove_instance(thisinst, elbwait, True)
