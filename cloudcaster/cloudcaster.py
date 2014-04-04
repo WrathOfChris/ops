@@ -336,6 +336,52 @@ for app in conf['apps']:
             if verbose:
                 print "SGRULE %s src %s %s %s:%s" % (elb_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
 
+  # Introduce multiple ELBs
+  if 'elbs' in app:
+        for elbname in app['elbs']:
+            # skip if previously created/registered
+            if 'elb' in app and elbname == app['elb']:
+                continue
+
+            elb = find_elb_conf(elbname, conf['elbs'])
+            if not elb:
+                print "ERROR: APP %s ELB %s does not exist" % (app['name'],
+                        elbname)
+                sys.exit(1)
+            elb_sg = find_sg(elb['group'], sgs)
+            if verbose:
+                print "APP %s ELB %s ELBSG %s" % (app['name'], elb['name'],
+                        elb_sg.name)
+
+            # ELB:APP rules
+            for port in elb['listeners']:
+                p_from = port['to']
+                p_to = port['to']
+                p_prot = port['to_prot']
+                if p_prot != 'udp' and p_prot != 'icmp':
+                    p_prot = 'tcp'
+                rule = find_sg_rule_group(elb_sg.id, elb_sg.owner_id, p_from,
+                        p_to, p_prot, sg.rules)
+                if rule == None:
+                    print "Creating SG rule for ELB -> SG ( %s, %s )" % (
+                            elb['name'], sg.name )
+                    if awsec2.authorize_security_group(group_id = sg.id,
+                            src_security_group_group_id = elb_sg.id,
+                            ip_protocol = p_prot,
+                            from_port = p_from,
+                            to_port = p_to
+                            ) != True:
+                        print "Failed authorizing ELB->SG"
+                        sys.exit(1)
+                    sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+                    sg = find_sg(app['group'], sgs)
+                    rule = find_sg_rule_group(elb_sg.id, elb_sg.owner_id,
+                            p_from, p_to, p_prot, sg.rules)
+                if verbose:
+                    print "SGRULE %s src %s %s %s:%s" % (elb_sg.name,
+                            rule.grants, rule.ip_protocol, rule.from_port,
+                            rule.to_port)
+
   # APP:APP rules
   for port in app['ports']:
     p_from = port['from']
@@ -841,6 +887,12 @@ for app in conf['apps']:
       # XXX make this idempotent
       if 'elb' in app:
         running = awselb.register_instances("%s-%s" % (app['elb'], conf['aws']['env']), instances)
+      if 'elbs' in app:
+          for elbname in app['elbs']:
+              # skip if previously created/registered
+              if 'elb' in app and elbname == app['elb']:
+                  continue
+              running = awselb.register_instances("%s-%s" % (elbname, conf['aws']['env']), instances)
 
     # ElasticIP
     addr_allocid = None
@@ -977,6 +1029,14 @@ for app in conf['apps']:
             sys.exit(1)
         elb_sg = find_sg(elb['group'], sgs)
         app_lbname = [ "%s-%s" % (elb['name'], conf['aws']['env']) ]
+    if 'elbs' in app:
+        for elbname in app['elbs']:
+            # skip if previously created/registered
+            if 'elb' in app and elbname == app['elb']:
+                continue
+        if app_lbname == None:
+            app_lbname = []
+        app_lbname.append("%s-%s" % (elbname, conf['aws']['env']))
 
     asgroups = awsasg.get_all_groups()
     if 'public' in app:
