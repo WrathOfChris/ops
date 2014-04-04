@@ -282,6 +282,21 @@ for app in conf['apps']:
       elbs = awselb.get_all_load_balancers(app['elb'])
     elb = elbs[0]
     app_lbname = [ elb.name ]
+  if 'elbs' in app:
+      for elbname in app['elbs']:
+          # skip if previously created/registered
+          if 'elb' in app and elbname == app['elb']:
+              continue
+      elbconf = find_elb_conf(elbname, conf['elbs'])
+      if elbconf != None:
+          elbs = awselb.get_all_load_balancers("%s-%s" % (elbname,
+              conf['aws']['env']))
+      else:
+          elbs = awselb.get_all_load_balancers(elbname)
+      elb = elbs[0]
+      if app_lbname == None:
+          app_lbname = []
+      app_lbname.append("%s-%s" % elb.name)
 
   asgroups = awsasg.get_all_groups(names=[asgname])
   if 'public' in app:

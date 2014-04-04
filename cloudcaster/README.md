@@ -150,6 +150,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
       "cluster": "blue",
       "group": "example-prod",
       "elb": "example",
+      "elbs": [ "example", "example-int" ],
       "ami": "ami-ccf297fc",
       "type": "t1.micro",
       "role": "discovery",
@@ -171,6 +172,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 * **apps[].cluster** - cluster name for the application.  Primarily for database clusters to co-exist in the same VPC environment, it allows instances to self-discover cluster members using ops tools such as [ec2nodefine](https://github.com/WrathOfChris/ops/tree/master/ec2nodefind).
 * **apps[].group** - security group for the application.  Unique within the VPC
 * **apps[].elb** - ELB to register the host instance or AutoScaleGroup with.  Does not register if not provided.
+* **apps[].elbs** - List of ELBs to register the host instance or AutoScaleGroup with if multiple ELBs are needed.  Does not register if not provided.
 * **apps[].public** - if present, launches the instances into the _public_ subnets of the VPC and assigns external public IP addresses to the instances in addition to the private address.  Required to skip NAT or for public access without a load balancer (ie: UDP).  In general, if hosts can be isolated in private subnets, they should be.
 * **apps[].addrs** - array of static IPs to be assigned to instances once running.  May take a second pass due to startup delays.
 * **apps[].ami** - the specific ID of an Amazon Machine Image to launch for the application.  Overrides _aminame_.  When modified on an AutoScaleGroup, cloudcaster creates a new launch config then updates the ASG with the new launch config.
