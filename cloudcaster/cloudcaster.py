@@ -1034,9 +1034,10 @@ for app in conf['apps']:
             # skip if previously created/registered
             if 'elb' in app and elbname == app['elb']:
                 continue
-        if app_lbname == None:
-            app_lbname = []
-        app_lbname.append("%s-%s" % (elbname, conf['aws']['env']))
+            if app_lbname == None:
+                app_lbname = []
+
+            app_lbname.append("%s-%s" % (elbname, conf['aws']['env']))
 
     asgroups = awsasg.get_all_groups()
     if 'public' in app:
