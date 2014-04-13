@@ -59,6 +59,7 @@ nat_subnetidx = 0
 nat_instances = []
 nat_instwait = 5
 nat_publicdns = None
+eip_pendwait = 5
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
@@ -897,8 +898,33 @@ for app in conf['apps']:
     # ElasticIP
     addr_allocid = None
     if 'addrs' in app:
-        # Check all addrs, and prefetch instance list again
+        # Check all addrs
         addrs = awsec2.get_all_addresses(app['addrs'])
+
+        if (len(instances) > 0):
+            # Wait for pending instances to start
+            pending = len(instances)
+            while pending > 0:
+                tagfilter = {
+                    'tag:%s' % conf['aws']['svctag']: app['svctag'],
+                    'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
+                    'vpc-id': vpc.id,
+                    'instance-state-name': 'pending'
+                }
+                pending_inst = awsec2.get_all_instances(filters=tagfilter)
+                if not pending_inst or len(pending_inst) == 0:
+                    pending = 0
+                else:
+                    print "Waiting for pending instances to start"
+                    time.sleep(eip_pendwait)
+
+        # Pull list of running
+        tagfilter = {
+            'tag:%s' % conf['aws']['svctag']: app['svctag'],
+            'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
+            'vpc-id': vpc.id,
+            'instance-state-name': 'running'
+        }
         running = awsec2.get_all_instances(filters=tagfilter)
         for addr in addrs:
             if addr.association_id == None:
@@ -1235,6 +1261,42 @@ if 'nat' in conf:
     rule = find_sg_rule_cidr('0.0.0.0/0', None, None, '-1', nat_sg.rules_egress)
   if verbose:
     print "SGRULE %s src %s %s %s:%s" % (nat_sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+
+  if 'aminame' in conf['nat'] and not 'ami' in conf['nat']:
+      # Search ami list, find best match
+      # 1. {{env}}-{{ami}}-{{date}}
+      # 2. all-{{ami}}-{{date}}
+      # 3. {{ami}}-{{date}}
+      ami = None
+      amifilter = { 'name': "%s-%s-*" % (conf['aws']['env'],
+          conf['nat']['aminame']) }
+      amis = awsec2.get_all_images(filters=amifilter)
+      if len(amis) > 0:
+          ami = find_amibyname("%s-%s" % (conf['aws']['env'],
+              conf['nat']['aminame']),
+              sorted(amis, key=lambda a: a.name, reverse=True))
+      if ami == None:
+          amifilter = { 'name': "all-%s-*" % conf['nat']['aminame'] }
+          amis = awsec2.get_all_images(filters=amifilter)
+          if len(amis) > 0:
+              ami = find_amibyname("all-%s" % conf['nat']['aminame'],
+                      sorted(amis, key=lambda a: a.name, reverse=True))
+      if ami == None:
+          amifilter = { 'name': "%s-*" % conf['nat']['aminame'] }
+          amis = awsec2.get_all_images(filters=amifilter)
+          if len(amis) > 0:
+              ami = find_amibyname("%s" % conf['nat']['aminame'],
+                      sorted(amis, key=lambda a: a.name, reverse=True))
+      if ami != None:
+          conf['nat']['ami'] = ami.id
+          if verbose:
+              print "AMI mapping %s to %s %s (%s)" % (conf['nat']['aminame'],
+                      ami.id, ami.name, ami.description)
+      else:
+          print "AMI mapping failed for \"%s\" as %s-%s-*, all-%s-*, %s" % (
+                  conf['nat']['aminame'], conf['aws']['env'],
+                  conf['nat']['aminame'], conf['nat']['aminame'],
+                  conf['nat']['aminame'])
 
   tagfilter = {
       'tag:%s' % conf['aws']['svctag']: conf['nat']['svctag'],
