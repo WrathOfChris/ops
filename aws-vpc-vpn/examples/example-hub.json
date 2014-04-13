@@ -1,0 +1,57 @@
+{
+  "aws": {
+    "continent": "us1",
+    "provider": "ec2",
+    "region": "us-west-2",
+    "privnet": "203.0.113.0/24",
+    "svctag": "service",
+    "envtag": "env",
+    "env": "prod",
+    "zone": "example.wrathofchris.com."
+  },
+
+  "vpc": {
+    "cidr": "203.0.113.0/26",
+    "subnets": [ "203.0.113.16/28" ],
+    "pubsubnets": [ "203.0.113.0/28" ],
+    "azs": [ "us-west-2a" ]
+  },
+
+  "nat": {
+    "name": "nat-hub",
+    "group": "nat-hub",
+    "svctag": "nat",
+    "aminame": "nat-hub",
+    "type": "t1.micro",
+    "keypair": "yourkeyhere",
+    "role": "discovery",
+    "psk": "This is a terrible place to keep a secret",
+    "ports": [
+      { "from": 500, "to": 500, "prot": "udp" },
+      { "from": 4500, "to": 4500, "prot": "udp" }
+    ]
+  },
+
+  "elbs": [ ],
+
+  "apps": [
+    {
+      "name": "vpn-hub",
+      "svctag": "vpn-hub",
+      "cluster": "vpn-hub",
+      "group": "vpn-hub-prod",
+      "aminame": "vpn-hub",
+      "public": "yes",
+      "type": "t1.micro",
+      "role": "discovery",
+      "keypair": "yourkeyhere",
+      "count": 1,
+      "ports": [ ],
+      "pubports": [
+          { "from": 500, "to": 500, "prot": "udp" },
+          { "from": 4500, "to": 4500, "prot": "udp" }
+      ],
+      "addrs": [ "198.51.100.100" ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+# nat-vpn defaults
+VPN_NET="{{vpn.net}}"
+VPN_PSK="{{vpn.psk}}"
+VPN_HUB="{{vpn.hub}}"

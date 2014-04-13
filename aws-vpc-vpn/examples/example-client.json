@@ -1,0 +1,38 @@
+{
+  "aws": {
+    "continent": "us1",
+    "provider": "ec2",
+    "region": "us-west-2",
+    "privnet": "203.0.113.0/24",
+    "svctag": "service",
+    "envtag": "env",
+    "env": "prod",
+    "zone": "example.wrathofchris.com."
+  },
+
+  "vpc": {
+    "cidr": "203.0.113.128/26",
+    "subnets": [ "203.0.113.144/28" ],
+    "pubsubnets": [ "203.0.113.128/28" ],
+    "azs": [ "us-west-2b" ]
+  },
+
+  "nat": {
+    "name": "nat-vpn",
+    "group": "nat-vpn",
+    "svctag": "nat",
+    "aminame": "nat-vpn",
+    "type": "t1.micro",
+    "keypair": "wrathofchris-201404",
+    "role": "discovery",
+    "psk": "This is a terrible place to keep a secret",
+    "ports": [
+      { "from": 500, "to": 500, "prot": "udp" },
+      { "from": 4500, "to": 4500, "prot": "udp" }
+    ]
+  },
+
+  "elbs": [ ],
+
+  "apps": [ ]
+}

@@ -1,0 +1,6 @@
+# vpn-hub defaults
+VPN_NET="{{vpn.net}}"
+VPN_PSK="{{vpn.psk}}"
+VPN_HUB="{{vpn.hub}}"
+VPN_SERVICE="{{vpn.service}}"
+VPN_REGIONS="{% for region in vpn.regions %}{{region}} {% endfor %}"

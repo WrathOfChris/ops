@@ -1,0 +1,25 @@
+---
+- yum: name=openswan state=present
+
+# OpenSWAN config
+- template: src=default.conf dest=/etc/ipsec.d/default.conf mode=0644 owner=root group=root
+- template: src=default.secrets dest=/etc/ipsec.d/default.secrets mode=0600 owner=root group=root
+- lineinfile: dest=/etc/ipsec.conf regexp="^include /etc/ipsec.d/" line="include /etc/ipsec.d/*.conf"
+
+# vpnify queries EC2 API for new VPCs with NAT-VPN hosts
+- copy: src=vpnify.py dest=/usr/local/sbin/vpnify.py mode=0755 owner=root group=root
+- cron: name=vpn-{{item}} cron_file=vpnify job="/usr/local/sbin/vpnify.py -s {{vpn.service}} -r {{item}} -f /etc/ipsec.d/{{item}}.conf" minute="0" user=root state=present
+  with_items: vpn.regions
+
+- copy: src=configure-vpn-hub.sh dest=/usr/local/sbin/configure-vpn-hub.sh mode=0755 owner=root group=root
+- template: src=vpn-hub.default dest=/etc/default/vpn-hub mode=0644 owner=root group=root
+
+# There are 2 rc.local on the Amazon NAT/PAT instance
+- lineinfile: dest={{item}} regexp="^/usr/local/sbin/configure-vpn-hub.sh" line="/usr/local/sbin/configure-vpn-hub.sh" insertbefore="^# Configure PAT"
+  with_items:
+  - /etc/rc.local
+  - /etc/rc.d/rc.local
+- lineinfile: dest={{item}} regexp="^# Configure VPN-HUB" line="# Configure VPN-HUB" insertbefore="^\/usr\/local\/sbin\/configure-vpn-hub.sh"
+  with_items:
+  - /etc/rc.local
+  - /etc/rc.d/rc.local

@@ -1,0 +1,16 @@
+---
+- yum: name=openswan state=latest
+- lineinfile: dest=/etc/ipsec.conf regexp="^include /etc/ipsec.d/" line="include /etc/ipsec.d/*.conf"
+
+- copy: src=configure-nat-vpn.sh dest=/usr/local/sbin/configure-nat-vpn.sh mode=0755 owner=root group=root
+- template: src=nat-vpn.default dest=/etc/default/nat-vpn mode=0644 owner=root group=root
+
+# There are 2 rc.local on the Amazon NAT/PAT instance
+- lineinfile: dest={{item}} regexp="^/usr/local/sbin/configure-nat-vpn.sh" line="/usr/local/sbin/configure-nat-vpn.sh" insertbefore="^# Configure PAT"
+  with_items:
+  - /etc/rc.local
+  - /etc/rc.d/rc.local
+- lineinfile: dest={{item}} regexp="^# Configure NAT-VPN" line="# Configure NAT-VPN" insertbefore="^\/usr\/local\/sbin\/configure-nat-vpn.sh"
+  with_items:
+  - /etc/rc.local
+  - /etc/rc.d/rc.local
