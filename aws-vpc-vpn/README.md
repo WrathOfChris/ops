@@ -1,6 +1,6 @@
 ## AWS VPC VPN
 
-![aws-vpc-vpn](https://raw.github.com/WrathOfChris/ops/master/aws-vpc-vpn/examples/img/aws-vpc-vpn.png)
+![aws-vpc-vpn](https://raw.githubusercontent.com/WrathOfChris/ops/cm-awsvpcvpn/aws-vpc-vpn/examples/aws-vpc-vpn.png)
 
 ### Build AMI images for the NAT-HUB, VPN-HUB, and NAT-VPN
 Change the vpn.hub address in group_vars/all to an ElasticIP you own.
