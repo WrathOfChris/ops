@@ -1,0 +1,13 @@
+---
+- copy: src=configure-nat-hub.sh dest=/usr/local/sbin/configure-nat-hub.sh mode=0755 owner=root group=root
+- template: src=nat-hub.default dest=/etc/default/nat-hub mode=0644 owner=root group=root
+
+# There are 2 rc.local on the Amazon NAT/PAT instance
+- lineinfile: dest={{item}} regexp="^/usr/local/sbin/configure-nat-hub.sh" line="/usr/local/sbin/configure-nat-hub.sh" insertbefore="^# Configure PAT"
+  with_items:
+  - /etc/rc.local
+  - /etc/rc.d/rc.local
+- lineinfile: dest={{item}} regexp="^# Configure NAT-HUB" line="# Configure NAT-HUB" insertbefore="^\/usr\/local\/sbin\/configure-nat-hub.sh"
+  with_items:
+  - /etc/rc.local
+  - /etc/rc.d/rc.local

@@ -1,0 +1,2 @@
+# nat-hub defaults
+VPN_NET="{{vpn.net}}"

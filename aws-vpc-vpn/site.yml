@@ -1,0 +1,118 @@
+# AMI Builder
+#
+# ansible-playbook -i inventory/local -t amibuilder -e amibuilder=base -e env=all site.yml
+#
+- name: AMIBUILDER provision
+  connection: local
+  hosts: 127.0.0.1
+  gather_facts: false
+  tags:
+  - amibuilder
+  vars:
+  - ec2_region: "us-west-2"
+  - ec2_ami: "{{site[ec2_region].aws_ami}}"
+  - ec2_type: "{{site.ec2_type}}"
+  - ec2_group: "{{site.ec2_group}}"
+  - ec2_keypair: "{{site.ec2_keypair}}"
+  - ec2_role: "{{site.ec2_role}}"
+  tasks:
+  - name: Provision AMIBUILDER instance
+    local_action: ec2 keypair={{ec2_keypair}} group={{ec2_group}} instance_type={{ec2_type}} image={{ec2_ami}} region={{ec2_region}} instance_profile_name={{ec2_role}} instance_tags='{"amibuilder":"{{amibuilder}}", "env":"{{env}}", "Name":"AMIBUILDER-{{amibuilder}}"}' wait=true count=1
+    register: ec2
+  - name: Wait for instance boot
+    local_action: wait_for host={{item.public_dns_name}} port=22 delay=60 timeout=400 state=started
+    with_items: ec2.instances
+
+- name: AMIIMAGER
+  connection: local
+  hosts: "tag_amibuilder_{{amibuilder}}"
+  tags:
+  - amiimager
+  tasks:
+  # force a filesystem sync before running the snapshot
+  - shell: /bin/sync
+  - shell: /bin/sleep 2
+  - shell: /bin/sync
+  - shell: /bin/sleep 2
+  - shell: /bin/sync
+  - shell: /bin/sleep 2
+  - shell: /bin/sync
+  - shell: /bin/sleep 2
+  - shell: /bin/sync
+  - shell: /bin/sleep 2
+  - local_action:
+      module: ec2_ami
+      region: "{{ec2_region}}"
+      instance_id: "{{ec2_id}}"
+      description: "{{env}} {{amibuilder}} {{ansible_date_time.iso8601}} {{ec2_instance_type}}"
+      wait: yes
+      name: "{{env}}-{{amibuilder}}-{{ansible_date_time.year}}{{ansible_date_time.month}}{{ansible_date_time.day}}{{ansible_date_time.hour}}{{ansible_date_time.minute}}{{ansible_date_time.second}}"
+      no_reboot: no
+    register: ami
+
+- name: AMIBUILDER termination
+  connection: local
+  hosts: tag_amibuilder_{{amibuilder}}
+  gather_facts: false
+  tags:
+  - amicleaner
+  vars:
+  - ec2_region: "us-west-2"
+  - ec2_group: "{{site.ec2_group}}"
+  - ec2_type: "{{site.ec2_type}}"
+  tasks:
+  - name: Terminate AMIBUILDER instances
+    local_action: ec2 group={{ec2_group}} instance_type={{ec2_type}} region={{ec2_region}} instance_ids={{ec2_id}} state=absent
+
+# AMIBUILDER security group
+- name: AMIBUILDER security
+  connection: local
+  hosts: 127.0.0.1
+  gather_facts: false
+  tags:
+  - amisecurity
+  vars:
+  - ec2_region: "us-west-2"
+  - ec2_group: "{{site.ec2_group}}"
+  tasks:
+  - name: Provision AMIBUILDER security group
+    local_action:
+      module: ec2_group
+      name: "{{ec2_group}}"
+      description: "{{ec2_group}}"
+      region: "{{ec2_region}}"
+      rules:
+        - proto: tcp
+          from_port: 22
+          to_port: 22
+          cidr_ip: 0.0.0.0/0
+
+# VPN-HUB
+- name: vpn-hub
+  hosts: tag_amibuilder_vpn-hub
+  tags:
+  - vpn-hub
+  roles:
+  - vpn-hub
+  user: ec2-user
+  sudo: true
+
+# NAT-HUB
+- name: nat-hub
+  hosts: tag_amibuilder_nat-hub
+  tags:
+  - nat-hub
+  roles:
+  - nat-hub
+  user: ec2-user
+  sudo: true
+
+# NAT-VPN
+- name: nat-vpn
+  hosts: tag_amibuilder_nat-vpn
+  tags:
+  - nat-vpn
+  roles:
+  - nat-vpn
+  user: ec2-user
+  sudo: true

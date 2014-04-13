@@ -1,0 +1,27 @@
+---
+site:
+    ec2_group: "amibuilder"
+    ec2_keypair: "yourkeyhere"
+    ec2_role: "discovery"
+    ec2_type: "t1.micro"
+    us-west-2:
+        aws_ami: "ami-f032acc0"     # us-west-2 amazon/amzn-ami-vpc-nat-pv-2013.09.0.x86_64-ebs
+
+vpn:
+    # IP network of the entire VPN range controlled by the hub.
+    # Private-use networks: 10.0.0.0/8, 172.16.0.0/12, or 192.168.0.0/16
+    # 203.0.113.0/24 is TEST-NET-3
+    net: "203.0.113.0/24"
+
+    # Use a PSK to simplify auto-configuration
+    psk: "This is a terrible place to keep a secret"
+
+    # Address of the VPN hub server
+    # 198.51.100.100 is in TEST-NET-2
+    hub: "198.51.100.100"
+
+    service: "nat"
+
+    # Regions to perform nat-vpn detection
+    regions:
+        - us-west-2
