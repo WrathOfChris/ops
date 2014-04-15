@@ -53,6 +53,8 @@ parser.add_argument("-r", "--region", help="ec2 region")
 parser.add_argument("-c", "--count", help="concurrent rotations", default=1)
 parser.add_argument("-s", "--sleep", help="wait sleep", default=5)
 parser.add_argument("-T", "--turbo", help="turbo mode", action="store_true", default=False)
+parser.add_argument("-n", "--num", help="number of hosts to rotate, 0 = all",
+        type=int, default=0)
 parser.add_argument("group", help="autoscale group to rotoate")
 args = parser.parse_args()
 if args.group == None:
@@ -63,6 +65,7 @@ if args.region == None:
   args.region = 'us-east-1'
 
 verbose = args.verbose
+awsec2 = boto.ec2.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 awselb = boto.ec2.elb.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 awsasg = boto.ec2.autoscale.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 
@@ -79,7 +82,10 @@ asg = awsasg.get_all_groups([args.group])[0]
 capacity = asg.desired_capacity
 
 if verbose:
-  print "%s rotating %i instances" % (args.group, len(asg.instances))
+  if args.num > 0:
+      print "%s rotating %i/%i instances" % (args.group, args.num, len(asg.instances))
+  else:
+      print "%s rotating %i instances" % (args.group, len(asg.instances))
   sys.stdout.flush()
 
 # start count of AZ instances
@@ -288,14 +294,37 @@ if args.turbo:
   sys.exit(0)
 
 #
-# Standard mode rotation - terminate and wait for new instance to come InService
+# Standard mode rotation:
+# - if the autoscale group has capacity, start and wait then terminate
+# - otherwise, terminate and wait for new instance to come InService
 #
 startfirst = False
 if asg.max_size > asg.desired_capacity:
     startfirst = True
 
+instrotate = 0
 for thisinst in oldinst:
   thisnewinst = None
+  elasticip = None
+
+  if args.num > 0 and instrotate >= args.num:
+      print "%s finished rotating requested %d/%d instances" % (args.group,
+              args.num, len(oldinst))
+      sys.exit(0)
+  instrotate += 1
+
+  # Determine if ElasticIP is in use, and save it for the new instance
+  addrinsts = awsec2.get_only_instances(thisinst)
+  for i in addrinsts:
+      for ni in i.interfaces:
+          # ElasticIPs are owned by account number, standard by 'amazon'
+          if str(ni.ipOwnerId) != 'amazon':
+              addrs = awsec2.get_all_addresses(ni.publicIp)
+              if len(addrs) > 0:
+                  elasticip = addrs[0]
+                  break
+      if elasticip:
+          break
 
   if not verbose:
     # first part of rotating i-xxxxxx -> i-xxxxxx
@@ -306,6 +335,13 @@ for thisinst in oldinst:
   elbwait = True
   if len(oldinst) > 1:
       elbwait = False
+
+  if elasticip:
+      if verbose:
+          print "%s %s disassociating ElasticIP %s" % (args.group, thisinst,
+                  elasticip.public_ip)
+          sys.stdout.flush()
+      elasticip.disassociate()
 
   if startfirst:
       asg = awsasg.get_all_groups([args.group])[0]
@@ -341,6 +377,13 @@ for thisinst in oldinst:
     # sleep a few
     if healthy != True:
       time.sleep(args.sleep)
+
+  if elasticip:
+      if verbose:
+          print "%s %s associating ElasticIP %s" % (args.group, thisnewinst,
+                  elasticip.public_ip)
+          sys.stdout.flush()
+      elasticip.associate(thisnewinst, allow_reassociation=True)
 
   # wait for new instance to register to the ELB
   elb_wait_registered(thisnewinst)
