@@ -318,7 +318,7 @@ for thisinst in oldinst:
   for i in addrinsts:
       for ni in i.interfaces:
           # ElasticIPs are owned by account number, standard by 'amazon'
-          if str(ni.ipOwnerId) != 'amazon':
+          if hasattr(ni, 'ipOwnerId') and str(ni.ipOwnerId) != 'amazon':
               addrs = awsec2.get_all_addresses(ni.publicIp)
               if len(addrs) > 0:
                   elasticip = addrs[0]
