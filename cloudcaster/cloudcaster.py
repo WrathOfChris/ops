@@ -985,6 +985,9 @@ for app in conf['apps']:
     if lc != None and lc.instance_type != app['type']:
       print "APP-LAUNCH %s type %s != %s" % (lc.name, lc.instance_type, app['type'])
       lc = None
+    if lc != None and lc.key_name != app['keypair']:
+      print "APP-LAUNCH %s key %s != %s" % (lc.name, lc.key_name, app['keypair'])
+      lc = None
     if lc == None:
       if 'ami' not in app:
           print "ERROR: APP-LAUNCH %s cannot create updated LaunchConfig without AMI mapping" % app['name']
