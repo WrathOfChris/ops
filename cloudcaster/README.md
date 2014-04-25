@@ -186,6 +186,8 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 * **apps[].allow** - array of ports to open from the specified security group for inter-application communication.
 * **apps[].autoscale.min** - AutoScaleGroup minimum instance count
 * **apps[].autoscale.max** - AutoScaleGroup maximum instance count
+* **apps[].extports** - array of ports to open to external public addresses of
+  group members.  ie: for cassandra.
 
 ## NETWORK
 Cloudcaster creates a VPC network as follows:

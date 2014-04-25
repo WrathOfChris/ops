@@ -1179,6 +1179,49 @@ for app in conf['apps']:
                                 # reality is AWS account ID
                                 ifce.ipOwnerId = 'self'
 
+    # External IP ports
+    if 'extports' in app:
+        # Pull list of instances
+        tagfilter = {
+            'tag:%s' % conf['aws']['svctag']: app['svctag'],
+            'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
+            'vpc-id': vpc.id
+        }
+        running = awsec2.get_all_instances(filters=tagfilter)
+        for r in running:
+            for i in r.instances:
+                for ifce in i.interfaces:
+                    for port in app['extports']:
+                        p_from = port['from']
+                        p_to = port['to']
+                        p_prot = port['prot']
+                        if p_prot != 'udp' and p_prot != 'icmp':
+                            p_prot = 'tcp'
+
+                        rule = find_sg_rule_cidr('%s/32' % ifce.publicIp,
+                                p_from, p_to, p_prot, sg.rules)
+                        if rule == None:
+                            print "Creating SG rule for EXTERNAL %s -> SG (%s, %s, %s)" % (
+                                    ifce.publicIp, p_from, p_to, p_prot)
+                            if awsec2.authorize_security_group(
+                                    group_id = sg.id,
+                                    cidr_ip = '%s/32' % ifce.publicIp,
+                                    ip_protocol = p_prot,
+                                    from_port = p_from,
+                                    to_port = p_to
+                                    ) != True:
+                                print "Failed authorizing PUBLIC->SG"
+                                sys.exit(1)
+                            sgs = awsec2.get_all_security_groups(
+                                    filters=vpcfilter)
+                            sg = find_sg(app['group'], sgs)
+                            rule = find_sg_rule_cidr('0.0.0.0/0', p_from, p_to,
+                                    p_prot, sg.rules)
+                        if verbose:
+                            print "SGRULE %s src %s %s %s:%s" % (sg.name,
+                                    rule.grants, rule.ip_protocol,
+                                    rule.from_port, rule.to_port)
+
 #
 # NAT/VPN instance
 #
