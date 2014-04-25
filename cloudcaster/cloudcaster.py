@@ -969,6 +969,19 @@ def really_get_all_launch_configurations():
 
   return res
 
+def really_get_all_autoscale_groups():
+  res = []
+  ags = awsasg.get_all_groups()
+  for a in ags:
+    res.append(a)
+
+  while ags.next_token != None:
+    ags = awsasg.get_all_groups(next_token=ags.next_token)
+    for a in ags:
+      res.append(a)
+
+  return res
+
 now = datetime.datetime.utcnow()
 nowstr = now.strftime("%Y%m%d%H%M%S")
 
@@ -1068,7 +1081,7 @@ for app in conf['apps']:
 
             app_lbname.append("%s-%s" % (elbname, conf['aws']['env']))
 
-    asgroups = awsasg.get_all_groups()
+    asgroups = really_get_all_autoscale_groups()
     if 'public' in app:
       subnetlist = ",".join(vpc_pubsubnetids)
     else:
@@ -1119,6 +1132,52 @@ for app in conf['apps']:
             ag_update = 1
     if ag_update == 1:
       req = ag.update()
+
+    # ElasticIP
+    addr_allocid = None
+    if 'addrs' in app:
+        # Check all addrs
+        addrs = awsec2.get_all_addresses(app['addrs'])
+
+        if (len(ag.instances) > 0):
+            # Wait for pending instances to start
+            pending = len(ag.instances)
+            while pending > 0:
+                tagfilter = {
+                    'tag:%s' % conf['aws']['svctag']: app['svctag'],
+                    'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
+                    'vpc-id': vpc.id,
+                    'instance-state-name': 'pending'
+                }
+                pending_inst = awsec2.get_all_instances(filters=tagfilter)
+                if not pending_inst or len(pending_inst) == 0:
+                    pending = 0
+                else:
+                    print "Waiting for pending instances to start"
+                    time.sleep(eip_pendwait)
+
+        # Pull list of running
+        tagfilter = {
+            'tag:%s' % conf['aws']['svctag']: app['svctag'],
+            'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
+            'vpc-id': vpc.id,
+            'instance-state-name': 'running'
+        }
+        running = awsec2.get_all_instances(filters=tagfilter)
+        for addr in addrs:
+            if addr.association_id == None:
+                for r in running:
+                    for i in r.instances:
+                        for ifce in i.interfaces:
+                            if str(ifce.ipOwnerId) == 'amazon':
+                                print "APP-INST %s allocating static %s" % (i.id, addr.public_ip)
+                                awsec2.associate_address(
+                                        instance_id=i.id,
+                                        allocation_id = addr.allocation_id
+                                        )
+                                # XXX change to identify allocation
+                                # reality is AWS account ID
+                                ifce.ipOwnerId = 'self'
 
 #
 # NAT/VPN instance
