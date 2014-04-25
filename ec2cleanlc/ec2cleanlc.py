@@ -69,6 +69,7 @@ parser = argparse.ArgumentParser(description="Remove stale AWS launch configurat
 
 parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
 parser.add_argument("-n", "--dry-run", help="Dry run, noop mode", action="store_true")
+parser.add_argument("-c", "--count", help="max count", type=int)
 parser.add_argument("file", help="cloudcaster JSON file")
 
 args = parser.parse_args()
@@ -78,6 +79,9 @@ if args.file == None:
 
 verbose = args.verbose
 dry_run = args.dry_run
+
+if args.count:
+    MAX_COUNT=args.count
 
 conffile = open(args.file).read()
 conf = json.loads(conffile)
