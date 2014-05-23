@@ -1,0 +1,117 @@
+#!/usr/bin/env python
+#
+# Copyright (c) 2014 Chris Maxwell <chris@wrathofchris.com>
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# Thanks to Mahesh Paolini-Subramanya (@dieswaytoofast) for his help
+#
+# CONFIGURATION
+# -------------
+#
+# Environment: (optional)
+#   SFL_USERNAME
+#   SFL_APIKEY
+#   SFL_CREDS_FILE
+#
+# ~/.softlayer_credentials:
+#   [softlayer]
+#   username=
+#   apikey=
+#
+import argparse
+import ConfigParser
+import os
+import os.path
+import sys
+
+try:
+    import json
+except ImportError:
+    import simplejson as json
+
+try:
+    import SoftLayer
+except ImportError:
+    print('SoftLayer required')
+    sys.exit(1)
+
+SFL_CONFIG_SECTION = 'softlayer'
+SFL_DEFAULT_CREDS_FILE = '~/.softlayer_credentials'
+
+class SoftLayerCommand(object):
+    def __init__(self):
+        self.username = None
+        self.apikey = None
+        self.credsfile = None
+
+        self.setup_creds()
+
+        self.client = SoftLayer.Client(username=self.username,
+                api_key=self.apikey)
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-v", "--verbose", help="verbosity",
+                action="store_true")
+        parser.add_argument("-i", "--instance", help="instance_id")
+        parser.add_argument("tags", help="comma separated list of tag_val")
+        self.args = parser.parse_args()
+
+        inst = self.get_instance(self.args.instance)
+        self.tag_instance(self.args.instance, self.args.tags)
+
+    def setup_creds(self):
+        if 'SFL_CREDS_FILE' in os.environ:
+            self.credsfile = os.path.expanduser(os.environ['SFL_CREDS_FILE'])
+            if not os.path.isfile(self.credsfile):
+                self.credsfile = None
+        if not self.credsfile:
+            self.credsfile = os.path.expanduser(SFL_DEFAULT_CREDS_FILE)
+            if not os.path.isfile(self.credsfile):
+                self.credsfile = None
+        if self.credsfile:
+            config = ConfigParser.SafeConfigParser()
+            config.read(self.credsfile)
+            self.username = config.get(SFL_CONFIG_SECTION, 'username')
+            self.apikey = config.get(SFL_CONFIG_SECTION, 'apikey')
+
+        # environment overrides config
+        if 'SFL_USERNAME' in os.environ:
+            self.username = os.environ['SFL_USERNAME']
+        if 'SFL_APIKEY' in os.environ:
+            self.apikey = os.environ['SFL_APIKEY']
+
+        if not self.username or not self.apikey:
+            sys.stderr.write('No environment set or no creds file %s\n'
+                    % SFL_DEFAULT_CREDS_FILE)
+            sys.exit(1)
+
+    def get_instance(self, instid):
+        return self.client['Virtual_Guest'].getObject(id=instid, mask='tagReferences')
+
+    def tag_instance(self, instid, tags):
+        return self.client['Virtual_Guest'].setTags(tags, id=instid)
+
+# Run!
+SoftLayerCommand()
