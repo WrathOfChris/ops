@@ -296,7 +296,7 @@ for app in conf['apps']:
       elb = elbs[0]
       if app_lbname == None:
           app_lbname = []
-      app_lbname.append("%s-%s" % elb.name)
+      app_lbname.append("%s-%s" % (elb.name, conf['aws']['env']))
 
   asgroups = awsasg.get_all_groups(names=[asgname])
   if 'public' in app:
