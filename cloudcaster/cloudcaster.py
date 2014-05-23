@@ -1139,7 +1139,8 @@ for app in conf['apps']:
         # Check all addrs
         addrs = awsec2.get_all_addresses(app['addrs'])
 
-        if (len(ag.instances) > 0):
+        ag = find_autoscale(asgname, asgroups)
+        if ag and len(ag.instances) > 0:
             # Wait for pending instances to start
             pending = len(ag.instances)
             while pending > 0:
