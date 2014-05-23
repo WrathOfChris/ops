@@ -104,36 +104,59 @@ class SoftLayerInventory(object):
             sys.exit(1)
 
     def get_inventory(self):
+        # NOTE: API is eventually consistent, but returns partial data during
+        #       creation and deletion of instances
         for v in self.client['Account'].getVirtualGuests(mask='datacenter, \
                 host, operatingSystem, orderedPackageId, powerState, \
                 serverRoom, sshKeys, status, tagReferences, userData, \
                 networkComponents'):
             self.host = {}
-            self.host['sfl_launch_time'] = v['createDate']
-            self.host['sfl_dns_name'] = v['fullyQualifiedDomainName']
+            self.host['sfl_launch_time'] = ''
+            if 'createDate' in v:
+                self.host['sfl_launch_time'] = v['createDate']
+            self.host['sfl_dns_name'] = ''
+            if 'fullyQualifiedDomainName' in v:
+                self.host['sfl_dns_name'] = v['fullyQualifiedDomainName']
             self.host['sfl_id'] = v['id']
             self.host['sfl_guid'] = v['globalIdentifier']
             self.host['sfl_uuid'] = v['uuid']
             self.host['sfl_state'] = v['powerState']['name']
-            self.host['sfl_ip_address'] = v['primaryIpAddress']
-            self.host['sfl_private_ip_address'] = v['primaryBackendIpAddress']
+            self.host['sfl_ip_address'] = ''
+            if 'primaryIpAddress' in v:
+                self.host['sfl_ip_address'] = v['primaryIpAddress']
+            self.host['sfl_private_ip_address'] = ''
+            if 'primaryBackendIpAddress' in v:
+                self.host['sfl_private_ip_address'] = v['primaryBackendIpAddress']
             self.host['sfl_cpu'] = v['maxCpu']
             self.host['sfl_mem'] = v['maxMemory']
-            self.host['sfl_hostname'] = v['hostname']
-            # datacenter: {'id': 168642, 'longName': 'San Jose 1', 'name': 'sjc01'},
-            self.host['sfl_region'] = v['datacenter']['name']
-            # serverRoom: {'id': 296192, 'longName': 'Server Room 02', 'name': '02'}
-            self.host['sfl_rack'] = v['serverRoom']['name']
+            self.host['sfl_hostname'] = ''
+            if 'hostname' in v:
+                self.host['sfl_hostname'] = v['hostname']
+            self.host['sfl_domain'] = ''
+            if 'domain' in v:
+                self.host['sfl_domain'] = v['domain']
+            self.host['sfl_region'] = ''
+            if 'datacenter' in v:
+                self.host['sfl_region'] = v['datacenter']['name']
+            self.host['sfl_rack'] = ''
+            if 'serverRoom' in v:
+                self.host['sfl_rack'] = v['serverRoom']['name']
+            self.host['sfl_key_name'] = ''
             if len(v['sshKeys']) > 0:
                 self.host['sfl_key_name'] = v['sshKeys'][0]['label']
-            self.host['sfl_kernel'] = \
-                v['operatingSystem']['softwareLicense']['softwareDescription']['referenceCode']
+            self.host['sfl_kernel'] = ''
+            if 'operatingSystem' in v:
+                self.host['sfl_kernel'] = \
+                        v['operatingSystem']['softwareLicense']['softwareDescription']['referenceCode']
 
             # Create a usable type by mashing cpu/memory/network
             # ie: 4 CPU, 8GB RAM, 100Mbit Net ==> c4m8n100
-            self.host['sfl_type'] = 'c%sm%sn%s' % (v['maxCpu'],
-                    v['maxMemory'] / 1024,
-                    v['networkComponents'][0]['maxSpeed'])
+            self.host['sfl_type'] = 'c%sm%s' % (v['maxCpu'],
+                    v['maxMemory'] / 1024)
+            if 'networkComponents' in v:
+                if len(v['networkComponents']) > 0:
+                    self.host['sfl_type'] += \
+                        'n%s' % v['networkComponents'][0]['maxSpeed']
 
             #
             # Inventory Mappings
@@ -158,15 +181,16 @@ class SoftLayerInventory(object):
             self.inventory[ self.host['sfl_dns_name'] ].append(hostkey)
 
             # host -> domain
-            if v['domain'] not in self.inventory:
-                self.inventory[ v['domain'] ] = list()
-            self.inventory[ v['domain'] ].append(hostkey)
+            if self.host['sfl_domain'] not in self.inventory:
+                self.inventory[ self.host['sfl_domain'] ] = list()
+            self.inventory[ self.host['sfl_domain'] ].append(hostkey)
 
             # host -> tags
-            for t in v['tagReferences']:
-                if 'tag_' + t['tag']['name'] not in self.inventory:
-                    self.inventory[ 'tag_' + t['tag']['name'] ] = list()
-                self.inventory[ 'tag_' + t['tag']['name'] ].append(hostkey)
+            if 'tagReferences' in v:
+                for t in v['tagReferences']:
+                    if 'tag_' + t['tag']['name'] not in self.inventory:
+                        self.inventory[ 'tag_' + t['tag']['name'] ] = list()
+                    self.inventory[ 'tag_' + t['tag']['name'] ].append(hostkey)
 
             # host -> DC
             if self.host['sfl_region'] not in self.inventory:
