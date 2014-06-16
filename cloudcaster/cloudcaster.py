@@ -835,6 +835,8 @@ for app in conf['apps']:
     instances = []
     for i in range(app['count'] - len(running)):
       subnetidx = (i + len(running)) % len(vpc_subnetids)
+      if 'azlimit' in app:
+          subnetidx = conf['vpc']['azs'].index(app['azlimit'])
       if 'public' in app:
         print "Creating PUBLIC instance %i of %i" % (i + 1, app['count'] - len(running))
         interface = boto.ec2.networkinterface.NetworkInterfaceSpecification(
@@ -1082,16 +1084,24 @@ for app in conf['apps']:
             app_lbname.append("%s-%s" % (elbname, conf['aws']['env']))
 
     asgroups = really_get_all_autoscale_groups()
+    azones = conf['vpc']['azs']
+    if 'azlimit' in app:
+        azindex = conf['vpc']['azs'].index(app['azlimit'])
+        azones = [ app['azlimit'] ]
     if 'public' in app:
       subnetlist = ",".join(vpc_pubsubnetids)
+      if 'azlimit' in app:
+          subnetlist = vpc_pubsubnetids[azindex]
     else:
       subnetlist = ",".join(vpc_subnetids)
+      if 'azlimit' in app:
+          subnetlist = vpc_subnetids[azindex]
     ag = find_autoscale(asgname, asgroups)
     if ag == None:
       print "Creating Autoscaling Group %s" % asgname
       ag = boto.ec2.autoscale.AutoScalingGroup(
           group_name = asgname,
-          availability_zones = conf['vpc']['azs'],
+          availability_zones = azones,
           launch_config = lc,
           load_balancers = app_lbname,
           min_size = app['autoscale']['min'],
@@ -1179,6 +1189,67 @@ for app in conf['apps']:
                                 # XXX change to identify allocation
                                 # reality is AWS account ID
                                 ifce.ipOwnerId = 'self'
+
+    # Secondary IPs
+    addr_allocid = None
+    if 'intaddrs' in app:
+        intaddrs = app['intaddrs']
+        ag = find_autoscale(asgname, asgroups)
+        if ag and len(ag.instances) > 0:
+            # Wait for pending instances to start
+            pending = len(ag.instances)
+            while pending > 0:
+                tagfilter = {
+                    'tag:%s' % conf['aws']['svctag']: app['svctag'],
+                    'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
+                    'vpc-id': vpc.id,
+                    'instance-state-name': 'pending'
+                }
+                pending_inst = awsec2.get_all_instances(filters=tagfilter)
+                if not pending_inst or len(pending_inst) == 0:
+                    pending = 0
+                else:
+                    print "Waiting for pending instances to start"
+                    time.sleep(eip_pendwait)
+
+        # Pull list of running
+        tagfilter = {
+            'tag:%s' % conf['aws']['svctag']: app['svctag'],
+            'tag:%s' % conf['aws']['envtag']: conf['aws']['env'],
+            'vpc-id': vpc.id,
+            'instance-state-name': 'running'
+        }
+        running = awsec2.get_all_instances(filters=tagfilter)
+
+        # Remove in-use private addresses
+        for r in running:
+            for i in r.instances:
+                for ifce in i.interfaces:
+                    for p in ifce.private_ip_addresses:
+                        if p.private_ip_address in intaddrs:
+                            intaddrs.remove(p.private_ip_address)
+
+        for addr in intaddrs:
+            for r in running:
+                for i in r.instances:
+                    if len(i.interfaces[0].private_ip_addresses) > 1:
+                        continue
+                    if addr == '':
+                        break
+
+                    print "APP-INST %s allocating internal %s" % (i.id, addr)
+                    try:
+                        awsec2.assign_private_ip_addresses(
+                                network_interface_id=i.interfaces[0].id,
+                                private_ip_addresses=addr,
+                                allow_reassignment=False)
+                    except boto.exception.EC2ResponseError:
+                        # likely wrong subnet
+                        print "Failed assigning private address, did you set azlimit?"
+                        continue
+                    else:
+                        addr = ''
+                        break
 
     # External IP ports
     if 'extports' in app:
