@@ -1138,6 +1138,9 @@ for app in conf['apps']:
     if 'addrs' in app:
         # Check all addrs
         addrs = awsec2.get_all_addresses(app['addrs'])
+        for addr in addrs:
+            if addr.association_id != None:
+                addrs.remove(addr)
 
         ag = find_autoscale(asgname, asgroups)
         if ag and len(ag.instances) > 0:
@@ -1165,20 +1168,22 @@ for app in conf['apps']:
             'instance-state-name': 'running'
         }
         running = awsec2.get_all_instances(filters=tagfilter)
-        for addr in addrs:
-            if addr.association_id == None:
-                for r in running:
-                    for i in r.instances:
-                        for ifce in i.interfaces:
-                            if str(ifce.ipOwnerId) == 'amazon':
-                                print "APP-INST %s allocating static %s" % (i.id, addr.public_ip)
-                                awsec2.associate_address(
-                                        instance_id=i.id,
-                                        allocation_id = addr.allocation_id
-                                        )
-                                # XXX change to identify allocation
-                                # reality is AWS account ID
-                                ifce.ipOwnerId = 'self'
+        for r in running:
+            for i in r.instances:
+                for ifce in i.interfaces:
+                    if str(ifce.ipOwnerId) == 'amazon':
+                        for addr in addrs:
+                            print "APP-INST %s allocating static %s" % (i.id,
+                                    addr.public_ip)
+                            awsec2.associate_address(
+                                    instance_id=i.id,
+                                    allocation_id = addr.allocation_id
+                                    )
+                            # XXX change to identify allocation
+                            # reality is AWS account ID
+                            ifce.ipOwnerId = 'self'
+                            addrs.remove(addr)
+                            break
 
     # External IP ports
     if 'extports' in app:
