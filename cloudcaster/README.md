@@ -151,6 +151,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
       "group": "example-prod",
       "elb": "example",
       "elbs": [ "example", "example-int" ],
+      "azlimit": "us-east-1a",
       "ami": "ami-ccf297fc",
       "type": "t1.micro",
       "role": "discovery",
@@ -188,6 +189,9 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 * **apps[].autoscale.max** - AutoScaleGroup maximum instance count
 * **apps[].extports** - array of ports to open to external public addresses of
   group members.  ie: for cassandra.
+* **apps[].azlimit** - single AZ to limit placement of instances
+* **apps[].intaddrs** - array of static internal IPs to be assigned to
+  instances once running.  May take a second pass due to startup delays.
 
 ## NETWORK
 Cloudcaster creates a VPC network as follows:

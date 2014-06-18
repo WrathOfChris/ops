@@ -306,6 +306,8 @@ instrotate = 0
 for thisinst in oldinst:
   thisnewinst = None
   elasticip = None
+  internalip = None
+  internaleni = None
 
   if args.num > 0 and instrotate >= args.num:
       print "%s finished rotating requested %d/%d instances" % (args.group,
@@ -326,6 +328,14 @@ for thisinst in oldinst:
       if elasticip:
           break
 
+  # Determine if Secondary IP is in use, and save for new instance
+  for i in addrinsts:
+      for ni in i.interfaces:
+          if len(ni.private_ip_addresses) > 1:
+              internalip = ni.private_ip_addresses[1].private_ip_address
+              internaleni = ni.id
+              break
+
   if not verbose:
     # first part of rotating i-xxxxxx -> i-xxxxxx
     print "%s rotating %s ->" % (args.group, thisinst),
@@ -342,6 +352,15 @@ for thisinst in oldinst:
                   elasticip.public_ip)
           sys.stdout.flush()
       elasticip.disassociate()
+
+  if internalip:
+      if verbose:
+          print "%s %s disassociating Secondary IP %s" % (args.group, thisinst,
+                  internalip)
+          sys.stdout.flush()
+      awsec2.unassign_private_ip_addresses(
+              network_interface_id=internaleni,
+              private_ip_addresses=internalip)
 
   if startfirst:
       asg = awsasg.get_all_groups([args.group])[0]
@@ -384,6 +403,19 @@ for thisinst in oldinst:
                   elasticip.public_ip)
           sys.stdout.flush()
       elasticip.associate(thisnewinst, allow_reassociation=True)
+
+  if internalip:
+      if verbose:
+          print "%s %s associating Secondary IP %s" % (args.group, thisnewinst,
+                  internalip)
+          sys.stdout.flush()
+      internaleni = None
+      for i in awsec2.get_only_instances(thisnewinst):
+          internaleni = i.interfaces[0].id
+      awsec2.assign_private_ip_addresses(
+              network_interface_id=internaleni,
+              private_ip_addresses=internalip,
+              allow_reassignment=False)
 
   # wait for new instance to register to the ELB
   elb_wait_registered(thisnewinst)
