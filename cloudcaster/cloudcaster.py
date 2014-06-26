@@ -43,6 +43,7 @@ import re
 import sys
 import time
 from pprint import pprint
+from collections import OrderedDict
 
 if 'AWS_ACCESS_KEY' in os.environ:
   aws_key = os.environ['AWS_ACCESS_KEY']
@@ -96,6 +97,20 @@ def find_vpc_acl(acls, vpc):
             return acl
     return None
 
+def validate_acl(entry):
+    retval = True
+    for acl in conf['vpc']['acls']:
+        if int(entry['rule_number']) != 32767:
+            for key in acl.keys():
+                if key == 'egress':
+                    if json.loads(entry[key]) == acl[key] and retval == True:
+                        retval = True
+                elif str(entry[key]) == str(acl[key]) and retval == True:
+                    retval = True
+                else:
+                    retval = False
+    return retval
+
 # Validate VPCs
 vpcs = awsvpc.get_all_vpcs()
 vpc = find_vpc(conf['vpc']['cidr'], vpcs)
@@ -130,10 +145,21 @@ if vpc == None:
                 if awsvpc.create_network_acl_entry(acl.id, **entry) == False:
                     print "FAILED TO CREATE:"
                     pprint(vars(entry))
+else:
+    # VPC exists, validate ACLs
+    if 'acls' in conf['vpc']:
+        acl = find_vpc_acl(acls, vpc)
+        # pprint(conf['vpc']['acls'])
+        for entry in acl.network_acl_entries:
+            if int(entry.__dict__['rule_number']) != 32767:
+                pprint(vars(entry))
+                pprint(validate_acl(entry.__dict__))
+        sys.exit(0)
+
 if verbose:
     print "VPC %s %s" % (vpc.id, vpc.cidr_block)
     print "VPC ACLS"
-    for acl in find_vpc_acls(acls, vpc):
+    for acl in find_vpc_acl(acls, vpc):
         pprint(vars(acl))
 
 
