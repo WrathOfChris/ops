@@ -115,7 +115,7 @@ if vpc == None:
     if 'acls' in conf['vpc']:
         # Lets only proceed down this path if people actually care.
         # Otherwise, accept the defaults (allow 0.0.0.0/0, in out)
-        acl = find_acl(acls, vpc)
+        acl = find_vpc_acl(acls, vpc)
         if acl != None:
             for entry in acl.network_acl_entries:
                 # default deny rule is not deleteable
@@ -129,7 +129,7 @@ if vpc == None:
 if verbose:
     print "VPC %s %s" % (vpc.id, vpc.cidr_block)
     print "VPC ACLS"
-    for acl in find_acls(acls, vpc):
+    for acl in find_vpc_acls(acls, vpc):
         pprint(vars(acl))
 
 
