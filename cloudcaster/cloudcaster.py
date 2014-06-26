@@ -42,6 +42,7 @@ import os
 import re
 import sys
 import time
+import yaml
 from pprint import pprint
 
 if 'AWS_ACCESS_KEY' in os.environ:
@@ -72,7 +73,18 @@ if args.file == None:
 verbose = args.verbose
 
 conffile = open(args.file).read()
-conf = json.loads(conffile)
+
+# If the file ends with .yaml, we're going to enforce
+# a standard from here that you need to use filenames.
+#
+# Otherwise, we're going to assume you're just using json
+# without extensions?
+#
+# - vjanelle
+if args.file.lower().endswith(".yaml"):
+    conf = yaml.load(conffile)
+else:
+    conf = json.loads(conffile)
 
 awsvpc = boto.vpc.connect_to_region(conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 awsec2 = boto.ec2.connect_to_region(conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
