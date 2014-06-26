@@ -90,12 +90,21 @@ def find_vpc(cidr, vpcs):
             return v
     return None
 
+def find_vpc_acl(acls, vpc):
+    for acl in acls:
+        if acl.vpc_id == vpc.id:
+            return acl
+    return None
+
 # Validate VPCs
 vpcs = awsvpc.get_all_vpcs()
 vpc = find_vpc(conf['vpc']['cidr'], vpcs)
+acls = awsvpc.get_all_network_acls()
+
 if vpc == None:
     print "Creating VPC %s" % conf['vpc']['cidr']
     vpc = awsvpc.create_vpc(conf['vpc']['cidr'])
+    acls = awsvpc.get_all_network_acls()
     if vpc == None:
         print "Failed creating VPC %s" % conf['vpc']['cidr']
         sys.exit(1)
@@ -103,8 +112,26 @@ if vpc == None:
     if awsvpc.modify_vpc_attribute(vpc.id, enable_dns_hostnames='true') != True:
         print "Failed enabling VPC DNS hostname resolution"
         sys.exit(1)
+    if 'acls' in conf['vpc']:
+        # Lets only proceed down this path if people actually care.
+        # Otherwise, accept the defaults (allow 0.0.0.0/0, in out)
+        acl = find_acl(acls, vpc)
+        if acl != None:
+            for entry in acl.network_acl_entries:
+                # default deny rule is not deleteable
+                # any rules < 32767 are fine, just not this one.
+                #
+                # converting to an int because in the resultset its a unicode string
+                if int(entry.rule_number) != 32767:
+                    if awsvpc.delete_network_acl_entry(acl.id, entry.rule_number, entry.egress) == False:
+                        print "FAILED TO DELETE:"
+                        pprint(vars(acl))
 if verbose:
-  print "VPC %s %s" % (vpc.id, vpc.cidr_block)
+    print "VPC %s %s" % (vpc.id, vpc.cidr_block)
+    print "VPC ACLS"
+    for acl in find_acls(acls, vpc):
+        pprint(vars(acl))
+
 
 #
 # VPC Internet Gateway
