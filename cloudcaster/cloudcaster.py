@@ -43,7 +43,9 @@ import re
 import sys
 import time
 import yaml
+import copy
 from pprint import pprint
+from collections import OrderedDict
 
 if 'AWS_ACCESS_KEY' in os.environ:
   aws_key = os.environ['AWS_ACCESS_KEY']
@@ -97,26 +99,110 @@ awsasg = boto.ec2.autoscale.connect_to_region(conf['aws']['region'], aws_access_
 #
 
 def find_vpc(cidr, vpcs):
-  for v in vpcs:
-    if v.cidr_block == cidr:
-      return v
-  return None
+    for v in vpcs:
+        if v.cidr_block == cidr:
+            return v
+    return None
+
+def find_vpc_acl(acls, vpc):
+    for acl in acls:
+        if acl.vpc_id == vpc.id:
+            return acl
+    return None
+
+#
+# Attempts to validate an acl entry with the json in a cloudcaster config
+#
+# TODO: Implement icmp and port_range handling
+#
+def validate_acl(entry, acls):
+    retval = True
+    for acl in acls:
+        if int(entry['rule_number']) != 32767 and int(entry['rule_number']) == int(acl['rule_number']):
+            for key in acl.keys():
+                if key == 'egress':
+                    if json.loads(entry[key]) == acl[key] and retval == True:
+                        retval = True
+                elif key == "icmp" and retval == True: # not handled
+                    retval = True
+                elif key == "port_range" and retval == True: # not handled
+                    retval = True
+                elif str(entry[key]) == str(acl[key]) and retval == True:
+                    retval = True
+                else:
+                    retval = False
+            # so we're probably good.
+            if retval == True:
+                acls.remove(acl)
+
+    return retval
 
 # Validate VPCs
 vpcs = awsvpc.get_all_vpcs()
 vpc = find_vpc(conf['vpc']['cidr'], vpcs)
+acls = awsvpc.get_all_network_acls()
+
 if vpc == None:
-  print "Creating VPC %s" % conf['vpc']['cidr']
-  vpc = awsvpc.create_vpc(conf['vpc']['cidr'])
-  if vpc == None:
-    print "Failed creating VPC %s" % conf['vpc']['cidr']
-    sys.exit(1)
-  # NOTE: boto has no way to query this
-  if awsvpc.modify_vpc_attribute(vpc.id, enable_dns_hostnames='true') != True:
-    print "Failed enabling VPC DNS hostname resolution"
-    sys.exit(1)
+    print "Creating VPC %s" % conf['vpc']['cidr']
+    vpc = awsvpc.create_vpc(conf['vpc']['cidr'])
+    acls = awsvpc.get_all_network_acls()
+    if vpc == None:
+        print "Failed creating VPC %s" % conf['vpc']['cidr']
+        sys.exit(1)
+    # NOTE: boto has no way to query this
+    if awsvpc.modify_vpc_attribute(vpc.id, enable_dns_hostnames='true') != True:
+        print "Failed enabling VPC DNS hostname resolution"
+        sys.exit(1)
+    if 'acls' in conf['vpc']:
+        # Lets only proceed down this path if people actually care.
+        # Otherwise, accept the defaults (allow 0.0.0.0/0, in out)
+        acl = find_vpc_acl(acls, vpc)
+        if acl != None:
+            for entry in acl.network_acl_entries:
+                # default deny rule is not deleteable
+                # any rules < 32767 are fine, just not this one.
+                #
+                # converting to an int because in the resultset its a unicode string
+                if int(entry.rule_number) != 32767:
+                    if awsvpc.delete_network_acl_entry(acl.id, entry.rule_number, entry.egress) == False:
+                        print "FAILED TO DELETE:"
+                        pprint(vars(acl))
+                    else:
+                        print "DELETED ACL %s" % entry.__dict__
+            for entry in conf['vpc']['acls']:
+                if awsvpc.create_network_acl_entry(acl.id, **entry) == False:
+                    print "FAILED TO CREATE:"
+                    pprint(entry)
+                else:
+                    print "CREATED %s" % entry
+else:
+    # VPC exists, validate ACLs
+    if 'acls' in conf['vpc']:
+        acl = find_vpc_acl(acls, vpc)
+        # Make a copy, we're going to push stuff off this
+        acls = copy.deepcopy(conf['vpc']['acls'])
+        for entry in acl.network_acl_entries:
+            if int(entry.__dict__['rule_number']) != 32767:
+                retval = validate_acl(entry.__dict__, acls)
+                if retval == False:
+                    print "** FAILED RULE MATCH, PLEASE REMEDIATE **"
+                    pprint(vars(entry))
+                    sys.exit(1)
+        if len(acls) > 0:
+            for todo_acl in acls:
+                if awsvpc.create_network_acl_entry(acl.id, **todo_acl) == False:
+                    print "FAILED TO CREATE:"
+                    pprint(todo_acl)
+                else:
+                    print "CREATED VPC ACL:"
+                    pprint(todo_acl)
+
 if verbose:
-  print "VPC %s %s" % (vpc.id, vpc.cidr_block)
+    print "VPC %s %s" % (vpc.id, vpc.cidr_block)
+    print "VPC ACLS"
+    for acl in find_vpc_acl(acls, vpc):
+        pprint(vars(acl))
+
 
 #
 # VPC Internet Gateway
@@ -195,6 +281,11 @@ if 'subnets' in conf['vpc']:
 # Public subnet IDs
 for n in conf['vpc']['pubsubnets']:
   net = find_subnet(n, nets)
+  while net == None:
+    nets = awsvpc.get_all_subnets()
+    net = find_subnet(n, nets)
+    print "Couldn't find %s, sleeping 10s" % n
+    time.sleep(10)
   vpc_pubsubnetids.append(net.id)
 
 #
