@@ -97,6 +97,11 @@ def find_vpc_acl(acls, vpc):
             return acl
     return None
 
+#
+# Attempts to validate an acl entry with the json in a cloudcaster config
+#
+# TODO: Implement icmp and port_range handling
+#
 def validate_acl(entry):
     retval = True
     for acl in conf['vpc']['acls']:
@@ -105,6 +110,10 @@ def validate_acl(entry):
                 if key == 'egress':
                     if json.loads(entry[key]) == acl[key] and retval == True:
                         retval = True
+                elif key == "icmp" and retval == True: # not handled
+                    retval = True
+                elif key == "port_range" and retval == True: # not handled
+                    retval = True
                 elif str(entry[key]) == str(acl[key]) and retval == True:
                     retval = True
                 else:
