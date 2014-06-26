@@ -126,6 +126,10 @@ if vpc == None:
                     if awsvpc.delete_network_acl_entry(acl.id, entry.rule_number, entry.egress) == False:
                         print "FAILED TO DELETE:"
                         pprint(vars(acl))
+            for entry in conf['vpc']['acls']:
+                if awsvpc.create_network_acl_entry(acl.id, **entry) == False:
+                    print "FAILED TO CREATE:"
+                    pprint(vars(entry))
 if verbose:
     print "VPC %s %s" % (vpc.id, vpc.cidr_block)
     print "VPC ACLS"
