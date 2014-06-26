@@ -66,7 +66,24 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
     "cidr": "10.0.0.0/22",
     "subnets": [ "10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24" ],
     "pubsubnets": [ "10.0.3.0/26", "10.0.3.64/26", "10.0.3.128/26" ],
-    "azs": [ "us-west-2a", "us-west-2b", "us-west-2c" ]
+    "azs": [ "us-west-2a", "us-west-2b", "us-west-2c" ],
+    "acls": [
+      {
+        "cidr_block": "0.0.0.0/0",
+        "egress": true,
+        "protocol": -1,
+        "rule_action": "allow",
+        "rule_number": 100
+      }
+      ,
+      {
+        "cidr_block": "0.0.0.0/0",
+        "egress": false,
+        "protocol": -1,
+        "rule_action": "allow",
+        "rule_number": 100
+      }
+    ]
   }
 ```
 
@@ -74,6 +91,9 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 * **vpc.subnets** - array of subnets to use for the **private** networks.  Must match the number of AZ's
 * **vpc.pubsubnets** - array of subnets to use for the **public** networks.  Must match the number of AZ's
 * **vpc.azs** - array of Availability Zones for this VPC to span
+* **vpc.acls** - array of boto.vpc.networkacl.NetworkAcl objects to
+  configure the VPC with.  Optional - if the key is not specified, AWS
+  will default to allowing all.
 
 ### nat
 
