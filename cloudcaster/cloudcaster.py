@@ -85,24 +85,24 @@ awsasg = boto.ec2.autoscale.connect_to_region(conf['aws']['region'], aws_access_
 #
 
 def find_vpc(cidr, vpcs):
-  for v in vpcs:
-    if v.cidr_block == cidr:
-      return v
-  return None
+    for v in vpcs:
+        if v.cidr_block == cidr:
+            return v
+    return None
 
 # Validate VPCs
 vpcs = awsvpc.get_all_vpcs()
 vpc = find_vpc(conf['vpc']['cidr'], vpcs)
 if vpc == None:
-  print "Creating VPC %s" % conf['vpc']['cidr']
-  vpc = awsvpc.create_vpc(conf['vpc']['cidr'])
-  if vpc == None:
-    print "Failed creating VPC %s" % conf['vpc']['cidr']
-    sys.exit(1)
+    print "Creating VPC %s" % conf['vpc']['cidr']
+    vpc = awsvpc.create_vpc(conf['vpc']['cidr'])
+    if vpc == None:
+        print "Failed creating VPC %s" % conf['vpc']['cidr']
+        sys.exit(1)
   # NOTE: boto has no way to query this
-  if awsvpc.modify_vpc_attribute(vpc.id, enable_dns_hostnames='true') != True:
-    print "Failed enabling VPC DNS hostname resolution"
-    sys.exit(1)
+    if awsvpc.modify_vpc_attribute(vpc.id, enable_dns_hostnames='true') != True:
+        print "Failed enabling VPC DNS hostname resolution"
+        sys.exit(1)
 if verbose:
   print "VPC %s %s" % (vpc.id, vpc.cidr_block)
 
