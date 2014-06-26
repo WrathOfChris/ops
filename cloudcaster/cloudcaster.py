@@ -123,7 +123,7 @@ def validate_acl(entry, acls):
             if retval == True:
                 acls.remove(acl)
 
-    return { "value": retval, "acls": acls }
+    return retval
 
 # Validate VPCs
 vpcs = awsvpc.get_all_vpcs()
@@ -155,10 +155,14 @@ if vpc == None:
                     if awsvpc.delete_network_acl_entry(acl.id, entry.rule_number, entry.egress) == False:
                         print "FAILED TO DELETE:"
                         pprint(vars(acl))
+                    else:
+                        print "DELETED ACL %s" % entry.__dict__
             for entry in conf['vpc']['acls']:
                 if awsvpc.create_network_acl_entry(acl.id, **entry) == False:
                     print "FAILED TO CREATE:"
                     pprint(entry)
+                else:
+                    print "CREATED %s" % entry
 else:
     # VPC exists, validate ACLs
     if 'acls' in conf['vpc']:
@@ -168,7 +172,7 @@ else:
         for entry in acl.network_acl_entries:
             if int(entry.__dict__['rule_number']) != 32767:
                 retval = validate_acl(entry.__dict__, acls)
-                if retval['value'] == False:
+                if retval == False:
                     print "** FAILED RULE MATCH, PLEASE REMEDIATE **"
                     pprint(vars(entry))
                     sys.exit(1)
@@ -267,6 +271,7 @@ for n in conf['vpc']['pubsubnets']:
   net = find_subnet(n, nets)
   while net == None:
     nets = awsvpc.get_all_subnets()
+    net = find_subnet(n, nets)
     print "Couldn't find %s, sleeping 10s" % n
     time.sleep(10)
   vpc_pubsubnetids.append(net.id)
