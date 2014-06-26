@@ -99,7 +99,7 @@ if vpc == None:
     if vpc == None:
         print "Failed creating VPC %s" % conf['vpc']['cidr']
         sys.exit(1)
-  # NOTE: boto has no way to query this
+    # NOTE: boto has no way to query this
     if awsvpc.modify_vpc_attribute(vpc.id, enable_dns_hostnames='true') != True:
         print "Failed enabling VPC DNS hostname resolution"
         sys.exit(1)
