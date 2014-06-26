@@ -42,6 +42,7 @@ import os
 import re
 import sys
 import time
+import copy
 from pprint import pprint
 from collections import OrderedDict
 
@@ -102,10 +103,10 @@ def find_vpc_acl(acls, vpc):
 #
 # TODO: Implement icmp and port_range handling
 #
-def validate_acl(entry):
+def validate_acl(entry, acls):
     retval = True
-    for acl in conf['vpc']['acls']:
-        if int(entry['rule_number']) != 32767:
+    for acl in acls:
+        if int(entry['rule_number']) != 32767 and int(entry['rule_number']) == int(acl['rule_number']):
             for key in acl.keys():
                 if key == 'egress':
                     if json.loads(entry[key]) == acl[key] and retval == True:
@@ -118,7 +119,11 @@ def validate_acl(entry):
                     retval = True
                 else:
                     retval = False
-    return retval
+            # so we're probably good.
+            if retval == True:
+                acls.remove(acl)
+
+    return { "value": retval, "acls": acls }
 
 # Validate VPCs
 vpcs = awsvpc.get_all_vpcs()
@@ -153,17 +158,28 @@ if vpc == None:
             for entry in conf['vpc']['acls']:
                 if awsvpc.create_network_acl_entry(acl.id, **entry) == False:
                     print "FAILED TO CREATE:"
-                    pprint(vars(entry))
+                    pprint(entry)
 else:
     # VPC exists, validate ACLs
     if 'acls' in conf['vpc']:
         acl = find_vpc_acl(acls, vpc)
-        # pprint(conf['vpc']['acls'])
+        # Make a copy, we're going to push stuff off this
+        acls = copy.deepcopy(conf['vpc']['acls'])
         for entry in acl.network_acl_entries:
             if int(entry.__dict__['rule_number']) != 32767:
-                pprint(vars(entry))
-                pprint(validate_acl(entry.__dict__))
-        sys.exit(0)
+                retval = validate_acl(entry.__dict__, acls)
+                if retval['value'] == False:
+                    print "** FAILED RULE MATCH, PLEASE REMEDIATE **"
+                    pprint(vars(entry))
+                    sys.exit(1)
+        if len(acls) > 0:
+            for todo_acl in acls:
+                if awsvpc.create_network_acl_entry(acl.id, **todo_acl) == False:
+                    print "FAILED TO CREATE:"
+                    pprint(todo_acl)
+                else:
+                    print "CREATED VPC ACL:"
+                    pprint(todo_acl)
 
 if verbose:
     print "VPC %s %s" % (vpc.id, vpc.cidr_block)
@@ -249,6 +265,10 @@ if 'subnets' in conf['vpc']:
 # Public subnet IDs
 for n in conf['vpc']['pubsubnets']:
   net = find_subnet(n, nets)
+  while net == None:
+    nets = awsvpc.get_all_subnets()
+    print "Couldn't find %s, sleeping 10s" % n
+    time.sleep(10)
   vpc_pubsubnetids.append(net.id)
 
 #
