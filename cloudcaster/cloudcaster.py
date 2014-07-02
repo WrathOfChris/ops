@@ -200,7 +200,7 @@ else:
 if verbose:
     print "VPC %s %s" % (vpc.id, vpc.cidr_block)
     print "VPC ACLS"
-    for acl in find_vpc_acl(acls, vpc):
+    for acl in find_vpc_acl(acls, vpc).network_acl_entries:
         pprint(vars(acl))
 
 
@@ -848,6 +848,9 @@ bdmapping['m3.2xlarge'] = 2
 bdmapping['m3.large'] = 1
 bdmapping['m3.medium'] = 1
 bdmapping['m3.xlarge'] = 2
+bdmapping['t2.micro'] = 0
+bdmapping['t2.small'] = 0
+bdmapping['t2.medium'] = 0
 
 def find_amibyname(name, amis):
   for a in amis:
