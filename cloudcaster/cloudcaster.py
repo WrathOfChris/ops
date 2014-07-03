@@ -1430,12 +1430,6 @@ if 'nat' in conf:
     print "SECGRP-NAT %s %s" % (nat_sg.id, nat_sg.name)
 
   # 22/ssh
-  _loop_delay = 10
-  while nat_sg == None:
-      print "creating nag_sg was empty, retrying in %s" % _loop_delay
-      time.sleep(_loop_delay)
-      _loop_delay += 10
-      nat_sg = find_sg(conf['nat']['group'], sgs)
   rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', nat_sg.rules)
   if rule == None:
     print "Creating SG rule for SSH -> NAT"
