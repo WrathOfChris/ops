@@ -175,6 +175,9 @@ if vpc == None:
                     pprint(entry)
                 else:
                     print "CREATED %s" % entry
+    if 'name' in conf['vpc']:
+        vpc.add_tag("Name", conf['vpc']['name'])
+        print "ADD NAME TAG {} to VPC {}".format(conf['vpc']['name'], conf['vpc']['cidr'])
 else:
     # VPC exists, validate ACLs
     if 'acls' in conf['vpc']:
@@ -196,6 +199,10 @@ else:
                 else:
                     print "CREATED VPC ACL:"
                     pprint(todo_acl)
+    if 'name' in conf['vpc']:
+        vpc.add_tag("Name", conf['vpc']['name'])
+        if verbose:
+            print "ADD NAME TAG {} to VPC {}".format(conf['vpc']['name'], conf['vpc']['cidr'])
 
 if verbose:
     print "VPC %s %s" % (vpc.id, vpc.cidr_block)
@@ -1423,6 +1430,12 @@ if 'nat' in conf:
     print "SECGRP-NAT %s %s" % (nat_sg.id, nat_sg.name)
 
   # 22/ssh
+  _loop_delay = 10
+  while nat_sg == None:
+      print "creating nag_sg was empty, retrying in %s" % _loop_delay
+      time.sleep(_loop_delay)
+      _loop_delay += 10
+      nat_sg = find_sg(conf['nat']['group'], sgs)
   rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', nat_sg.rules)
   if rule == None:
     print "Creating SG rule for SSH -> NAT"

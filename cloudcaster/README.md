@@ -67,6 +67,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
     "subnets": [ "10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24" ],
     "pubsubnets": [ "10.0.3.0/26", "10.0.3.64/26", "10.0.3.128/26" ],
     "azs": [ "us-west-2a", "us-west-2b", "us-west-2c" ],
+    "name": "Secrets",
     "acls": [
       {
         "cidr_block": "0.0.0.0/0",
@@ -91,6 +92,8 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 * **vpc.subnets** - array of subnets to use for the **private** networks.  Must match the number of AZ's
 * **vpc.pubsubnets** - array of subnets to use for the **public** networks.  Must match the number of AZ's
 * **vpc.azs** - array of Availability Zones for this VPC to span
+* **vpc.name** - String to set the "Name" tag to - helps identify in the
+  console
 * **vpc.acls** - array of boto.vpc.networkacl.NetworkAcl objects to
   configure the VPC with.  Optional - if the key is not specified, AWS
   will default to allowing all.
