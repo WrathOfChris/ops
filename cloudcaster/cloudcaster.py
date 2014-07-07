@@ -175,6 +175,9 @@ if vpc == None:
                     pprint(entry)
                 else:
                     print "CREATED %s" % entry
+    if 'name' in conf['vpc']:
+        vpc.add_tag("Name", conf['vpc']['name'])
+        print "ADD NAME TAG {} to VPC {}".format(conf['vpc']['name'], conf['vpc']['cidr'])
 else:
     # VPC exists, validate ACLs
     if 'acls' in conf['vpc']:
@@ -196,6 +199,10 @@ else:
                 else:
                     print "CREATED VPC ACL:"
                     pprint(todo_acl)
+    if 'name' in conf['vpc']:
+        vpc.add_tag("Name", conf['vpc']['name'])
+        if verbose:
+            print "ADD NAME TAG {} to VPC {}".format(conf['vpc']['name'], conf['vpc']['cidr'])
 
 if verbose:
     print "VPC %s %s" % (vpc.id, vpc.cidr_block)
