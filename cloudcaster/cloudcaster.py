@@ -176,6 +176,10 @@ if vpc == None:
                 else:
                     print "CREATED %s" % entry
     if 'name' in conf['vpc']:
+        while vpc == None:
+            print "CAN'T FIND VPC I JUST MADE !)@(()!*@#"
+            vpc = find_vpc(conf['vpc']['cidr'], vpcs)
+            time.sleep(10)
         vpc.add_tag("Name", conf['vpc']['name'])
         print "ADD NAME TAG {} to VPC {}".format(conf['vpc']['name'], conf['vpc']['cidr'])
 else:
@@ -322,7 +326,13 @@ for elb in conf['elbs']:
   elb_sg = find_sg(elb['group'], sgs)
   if elb_sg == None:
     print "Creating Security Group %s for VPC %s elb %s" % (elb['group'], conf['vpc']['cidr'], elb['name'])
-    elb_sg = awsec2.create_security_group(elb['group'], elb['group'], vpc_id = vpc.id)
+    try:
+        elb_sg = awsec2.create_security_group(elb['group'], elb['group'], vpc_id = vpc.id)
+    except:
+        while elb_sg == None:
+            print "Failed creating SG %s for VPC %s elb %s" % (elb['group'], conf['vpc']['cidr'], elb['name'])
+            elb_sg = awsec2.create_security_group(elb['group'], elb['group'], vpc_id = vpc.id)
+            time.sleep(10)
     if elb_sg == None:
       print "Failed creating SG %s for VPC %s elb %s" % (elb['group'], conf['vpc']['cidr'], elb['name'])
       sys.exit(1)
@@ -609,7 +619,7 @@ for app in conf['apps']:
         print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
 
   # SSH:APP rule
-  if "public_rules" not in conf['vpc']:
+  if "default_rules" not in conf['vpc']:
       rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', sg.rules)
       if rule == None:
         print "Creating SG rule for SSH -> SG"
@@ -626,21 +636,6 @@ for app in conf['apps']:
         rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', sg.rules)
       if verbose:
         print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
-  else:
-      for public_rule in conf['vpc']['public_rules']:
-          rule = find_sg_rule_cidr(public_rule['cidr_ip'], public_rule['from_port'], public_rule['to_port'], public_rule['ip_protocol'], sg.rules)
-          if rule == None:
-              print "Creating SG rule for {}".format(public_rule)
-              if awsec2.authorize_security_group(group_id = sg.id, **public_rule) != True:
-                  print "Failed authorizing {}".format(public_rule)
-                  sys.exit(1)
-              if verbose:
-                  sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-                  sg = find_sg(app['group'], sgs)
-                  rule = find_sg_rule_cidr(public_rule['cidr_ip'], public_rule['from_port'], public_rule['to_port'], public_rule['ip_protocol'], sg.rules)
-                  print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
-  if "privnet_rules" not in conf['vpc']:
-      # icmp
       if 'privnet' in conf['aws'].keys():
         rule = find_sg_rule_cidr(conf['aws']['privnet'], -1, -1, 'icmp', sg.rules)
         if rule == None:
@@ -659,17 +654,17 @@ for app in conf['apps']:
       if verbose:
         print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
   else:
-      for private_rule in conf['vpc']['privnet_rules']:
-          rule = find_sg_rule_cidr(private_rule['cidr_ip'], private_rule['from_port'], private_rule['to_port'], private_rule['ip_protocol'], sg.rules)
+      for new_rule in conf['vpc']['default_rules']:
+          rule = find_sg_rule_cidr(new_rule['cidr_ip'], new_rule['from_port'], new_rule['to_port'], new_rule['ip_protocol'], sg.rules)
           if rule == None:
-              print "Creating SG rule for {}".format(private_rule)
-              if awsec2.authorize_security_group(group_id = sg.id, **private_rule) != True:
-                  print "Failed authorizing {}".format(private_rule)
+              print "Creating SG rule for {}".format(new_rule)
+              if awsec2.authorize_security_group(group_id = sg.id, **new_rule) != True:
+                  print "Failed authorizing {}".format(new_rule)
                   sys.exit(1)
               if verbose:
                   sgs = awsec2.get_all_security_groups(filters=vpcfilter)
                   sg = find_sg(app['group'], sgs)
-                  rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', sg.rules)
+                  rule = find_sg_rule_cidr(new_rule['cidr_ip'], new_rule['from_port'], new_rule['to_port'], new_rule['ip_protocol'], sg.rules)
                   print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
 
 #
