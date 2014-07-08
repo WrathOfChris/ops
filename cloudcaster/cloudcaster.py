@@ -609,41 +609,68 @@ for app in conf['apps']:
         print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
 
   # SSH:APP rule
-  rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', sg.rules)
-  if rule == None:
-    print "Creating SG rule for SSH -> SG"
-    if awsec2.authorize_security_group(group_id = sg.id,
-          cidr_ip = '0.0.0.0/0',
-          ip_protocol = 'tcp',
-          from_port = 22,
-          to_port = 22
-        ) != True:
-      print "Failed authorizing SSH->SG"
-      sys.exit(1)
-    sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-    sg = find_sg(app['group'], sgs)
-    rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', sg.rules)
-  if verbose:
-    print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
-
-  # icmp
-  if 'privnet' in conf['aws'].keys():
-    rule = find_sg_rule_cidr(conf['aws']['privnet'], -1, -1, 'icmp', sg.rules)
-    if rule == None:
-      print "Creating SG rule for ICMP -> SG"
-      if awsec2.authorize_security_group(group_id = sg.id,
-            cidr_ip = conf['aws']['privnet'],
-            ip_protocol = 'icmp',
-            from_port = -1,
-            to_port = -1 
-          ) != True:
-        print "Failed authorizing ICMP->SG"
-        sys.exit(1)
-      sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-      sg = find_sg(app['group'], sgs)
-      rule = find_sg_rule_cidr(conf['aws']['privnet'], -1, -1, 'icmp', sg.rules)
-  if verbose:
-    print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+  if "public_rules" not in conf['vpc']:
+      rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', sg.rules)
+      if rule == None:
+        print "Creating SG rule for SSH -> SG"
+        if awsec2.authorize_security_group(group_id = sg.id,
+              cidr_ip = '0.0.0.0/0',
+              ip_protocol = 'tcp',
+              from_port = 22,
+              to_port = 22
+            ) != True:
+          print "Failed authorizing SSH->SG"
+          sys.exit(1)
+        sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+        sg = find_sg(app['group'], sgs)
+        rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', sg.rules)
+      if verbose:
+        print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+  else:
+      for public_rule in conf['vpc']['public_rules']:
+          rule = find_sg_rule_cidr(public_rule['cidr_ip'], public_rule['from_port'], public_rule['to_port'], public_rule['ip_protocol'], sg.rules)
+          if rule == None:
+              print "Creating SG rule for {}".format(public_rule)
+              if awsec2.authorize_security_group(group_id = sg.id, **public_rule) != True:
+                  print "Failed authorizing {}".format(public_rule)
+                  sys.exit(1)
+              if verbose:
+                  sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+                  sg = find_sg(app['group'], sgs)
+                  rule = find_sg_rule_cidr(public_rule['cidr_ip'], public_rule['from_port'], public_rule['to_port'], public_rule['ip_protocol'], sg.rules)
+                  print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+  if "privnet_rules" not in conf['vpc']:
+      # icmp
+      if 'privnet' in conf['aws'].keys():
+        rule = find_sg_rule_cidr(conf['aws']['privnet'], -1, -1, 'icmp', sg.rules)
+        if rule == None:
+          print "Creating SG rule for ICMP -> SG"
+          if awsec2.authorize_security_group(group_id = sg.id,
+                cidr_ip = conf['aws']['privnet'],
+                ip_protocol = 'icmp',
+                from_port = -1,
+                to_port = -1 
+              ) != True:
+            print "Failed authorizing ICMP->SG"
+            sys.exit(1)
+          sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+          sg = find_sg(app['group'], sgs)
+          rule = find_sg_rule_cidr(conf['aws']['privnet'], -1, -1, 'icmp', sg.rules)
+      if verbose:
+        print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+  else:
+      for private_rule in conf['vpc']['privnet_rules']:
+          rule = find_sg_rule_cidr(private_rule['cidr_ip'], private_rule['from_port'], private_rule['to_port'], private_rule['ip_protocol'], sg.rules)
+          if rule == None:
+              print "Creating SG rule for {}".format(private_rule)
+              if awsec2.authorize_security_group(group_id = sg.id, **private_rule) != True:
+                  print "Failed authorizing {}".format(private_rule)
+                  sys.exit(1)
+              if verbose:
+                  sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+                  sg = find_sg(app['group'], sgs)
+                  rule = find_sg_rule_cidr('0.0.0.0/0', 22, 22, 'tcp', sg.rules)
+                  print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
 
 #
 # ELB ALLOW RULES - after APP for SG creation
