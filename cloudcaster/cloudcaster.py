@@ -1067,11 +1067,11 @@ for app in conf['apps']:
             'instance-state-name': 'running'
         }
         running = awsec2.get_all_instances(filters=tagfilter)
-        for addr in addrs:
-            for r in running:
-                for i in r.instances:
-                    for ifce in i.interfaces:
-                        if str(ifce.ipOwnerId) == 'amazon':
+        for r in running:
+            for i in r.instances:
+                for ifce in i.interfaces:
+                    if str(ifce.ipOwnerId) == 'amazon':
+                        for addr in addrs:
                             print "APP-INST %s allocating static %s" % (i.id,
                                     addr.public_ip)
                             awsec2.associate_address(
@@ -1081,6 +1081,8 @@ for app in conf['apps']:
                             # XXX change to identify allocation
                             # reality is AWS account ID
                             ifce.ipOwnerId = 'self'
+                            addrs.remove(addr)
+                            break
 
 #
 # AutoScale
@@ -1318,10 +1320,10 @@ for app in conf['apps']:
             'instance-state-name': 'running'
         }
         running = awsec2.get_all_instances(filters=tagfilter)
-        for addr in addrs:
-            for r in running:
-                for i in r.instances:
-                    for ifce in i.interfaces:
+        for r in running:
+            for i in r.instances:
+                for ifce in i.interfaces:
+                    for addr in addrs:
                         if str(ifce.ipOwnerId) == 'amazon':
                             print "APP-INST %s allocating static %s" % (i.id,
                                     addr.public_ip)
@@ -1332,6 +1334,8 @@ for app in conf['apps']:
                             # XXX change to identify allocation
                             # reality is AWS account ID
                             ifce.ipOwnerId = 'self'
+                            addrs.remove(addr)
+                            break
 
     # Secondary IPs
     addr_allocid = None
