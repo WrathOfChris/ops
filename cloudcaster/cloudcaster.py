@@ -1036,7 +1036,11 @@ for app in conf['apps']:
     addr_allocid = None
     if 'addrs' in app:
         # Check all addrs
-        addrs = awsec2.get_all_addresses(app['addrs'])
+        addrs = list()
+        ec2addrs = awsec2.get_all_addresses(app['addrs'])
+        for addr in ec2addrs:
+            if addr.association_id == None:
+                addrs.append(addr)
 
         if (len(instances) > 0):
             # Wait for pending instances to start
@@ -1064,19 +1068,19 @@ for app in conf['apps']:
         }
         running = awsec2.get_all_instances(filters=tagfilter)
         for addr in addrs:
-            if addr.association_id == None:
-                for r in running:
-                    for i in r.instances:
-                        for ifce in i.interfaces:
-                            if str(ifce.ipOwnerId) == 'amazon':
-                                print "APP-INST %s allocating static %s" % (i.id, addr.public_ip)
-                                awsec2.associate_address(
-                                        instance_id=i.id,
-                                        allocation_id = addr.allocation_id
-                                        )
-                                # XXX change to identify allocation
-                                # reality is AWS account ID
-                                ifce.ipOwnerId = 'self'
+            for r in running:
+                for i in r.instances:
+                    for ifce in i.interfaces:
+                        if str(ifce.ipOwnerId) == 'amazon':
+                            print "APP-INST %s allocating static %s" % (i.id,
+                                    addr.public_ip)
+                            awsec2.associate_address(
+                                    instance_id=i.id,
+                                    allocation_id = addr.allocation_id
+                                    )
+                            # XXX change to identify allocation
+                            # reality is AWS account ID
+                            ifce.ipOwnerId = 'self'
 
 #
 # AutoScale
@@ -1282,10 +1286,11 @@ for app in conf['apps']:
     addr_allocid = None
     if 'addrs' in app:
         # Check all addrs
-        addrs = awsec2.get_all_addresses(app['addrs'])
-        for addr in addrs:
-            if addr.association_id != None:
-                addrs.remove(addr)
+        addrs = list()
+        ec2addrs = awsec2.get_all_addresses(app['addrs'])
+        for addr in ec2addrs:
+            if addr.association_id == None:
+                addrs.append(addr)
 
         ag = find_autoscale(asgname, asgroups)
         if ag and len(ag.instances) > 0:
@@ -1313,11 +1318,11 @@ for app in conf['apps']:
             'instance-state-name': 'running'
         }
         running = awsec2.get_all_instances(filters=tagfilter)
-        for r in running:
-            for i in r.instances:
-                for ifce in i.interfaces:
-                    if str(ifce.ipOwnerId) == 'amazon':
-                        for addr in addrs:
+        for addr in addrs:
+            for r in running:
+                for i in r.instances:
+                    for ifce in i.interfaces:
+                        if str(ifce.ipOwnerId) == 'amazon':
                             print "APP-INST %s allocating static %s" % (i.id,
                                     addr.public_ip)
                             awsec2.associate_address(
@@ -1327,8 +1332,6 @@ for app in conf['apps']:
                             # XXX change to identify allocation
                             # reality is AWS account ID
                             ifce.ipOwnerId = 'self'
-                            addrs.remove(addr)
-                            break
 
     # Secondary IPs
     addr_allocid = None
