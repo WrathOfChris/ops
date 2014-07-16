@@ -34,6 +34,7 @@ import boto.ec2.autoscale
 import boto.vpc
 import datetime
 import json
+import yaml
 import os
 import re
 import sys
@@ -52,7 +53,7 @@ else:
 parser = argparse.ArgumentParser()
 parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
 parser.add_argument("-r", "--region", help="ec2 region")
-parser.add_argument("-f", "--file", help="cloudcaster JSON file")
+parser.add_argument("-f", "--file", help="cloudcaster spec file")
 parser.add_argument("name", help="app name to implement")
 args = parser.parse_args()
 if args.name == None or args.file == None:
@@ -60,7 +61,18 @@ if args.name == None or args.file == None:
   sys.exit(1)
 
 conffile = open(args.file).read()
-conf = json.loads(conffile)
+
+# If the file ends with .yaml, we're going to enforce
+# a standard from here that you need to use filenames.
+#
+# Otherwise, we're going to assume you're just using json
+# without extensions?
+#
+# - vjanelle
+if args.file.lower().endswith(".yaml"):
+    conf = yaml.load(conffile)
+else:
+    conf = json.loads(conffile)
 
 if args.region == None:
   args.region = 'us-east-1'
@@ -103,6 +115,9 @@ bdmapping['m3.2xlarge'] = 2
 bdmapping['m3.large'] = 1
 bdmapping['m3.medium'] = 1
 bdmapping['m3.xlarge'] = 2
+bdmapping['t2.micro'] = 0
+bdmapping['t2.small'] = 0
+bdmapping['t2.medium'] = 0
 
 def find_vpc(cidr, vpcs):
   for v in vpcs:
