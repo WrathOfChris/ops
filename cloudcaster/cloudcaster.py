@@ -370,31 +370,31 @@ for app in conf['apps']:
 #
 
 def find_sg_rule_group(sg_id, owner_id, p_from, p_to, p_prot, rules):
-  grant = '%s-%s' % (sg_id, owner_id)
-  for r in rules:
-    if int(r.from_port) == int(p_from) and int(r.to_port) == int(p_to) and str(r.ip_protocol) == str(p_prot):
-      for g in r.grants:
-        # grant is a unicode, use str() for comparison
-        if str(g) == grant:
-          return r
-  return None
+    grant = '%s-%s' % (sg_id, owner_id)
+    for r in rules:
+        if int(r.from_port) == int(p_from) and int(r.to_port) == int(p_to) and str(r.ip_protocol) == str(p_prot):
+            for g in r.grants:
+                # grant is a unicode, use str() for comparison
+                if str(g) == grant:
+                    return r
+    return None
 
 def find_sg_rule_cidr(cidr , p_from, p_to, p_prot, rules):
-  for r in rules:
-    if p_from == None or p_to == None or r.to_port == None or r.from_port == None:
-      # cannot int() a NoneType, so handle it separately
-      if p_from == None and p_to == None and r.to_port == None and r.from_port == None and str(r.ip_protocol) == str(p_prot):
-        for g in r.grants:
-          # grant is a unicode, use str() for comparison
-          if str(g) == str(cidr):
-            return r
-      continue
-    if int(r.from_port) == int(p_from) and int(r.to_port) == int(p_to) and str(r.ip_protocol) == str(p_prot):
-      for g in r.grants:
-        # grant is a unicode, use str() for comparison
-        if str(g) == str(cidr):
-          return r
-  return None
+    for r in rules:
+        if p_from == None or p_to == None or r.to_port == None or r.from_port == None:
+            # cannot int() a NoneType, so handle it separately
+            if p_from == None and p_to == None and r.to_port == None and r.from_port == None and str(r.ip_protocol) == str(p_prot):
+                for g in r.grants:
+                    # grant is a unicode, use str() for comparison
+                    if str(g) == str(cidr):
+                        return r
+            continue
+        if int(r.from_port) == int(p_from) and int(r.to_port) == int(p_to) and str(r.ip_protocol) == str(p_prot):
+            for g in r.grants:
+                # grant is a unicode, use str() for comparison
+                if str(g) == str(cidr):
+                    return r
+    return None
 
 #
 # ELB Security Rules
