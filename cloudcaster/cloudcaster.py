@@ -98,6 +98,10 @@ awsasg = boto.ec2.autoscale.connect_to_region(conf['aws']['region'], aws_access_
 # VPC
 #
 
+def refresh_vpc():
+    vpcs = awsvpc.get_all_vpcs()
+    return vpcs
+
 def find_vpc(cidr, vpcs):
     for v in vpcs:
         if v.cidr_block == cidr:
@@ -178,6 +182,7 @@ if vpc == None:
     if 'name' in conf['vpc']:
         while vpc == None:
             print "CAN'T FIND VPC I JUST MADE !)@(()!*@#"
+            vpcs = refresh_vpc()
             vpc = find_vpc(conf['vpc']['cidr'], vpcs)
             time.sleep(10)
         vpc.add_tag("Name", conf['vpc']['name'])
@@ -283,10 +288,15 @@ for n in conf['vpc']['pubsubnets']:
     print "VPC-SUBNET %s %s PUBLIC" % (net.id, net.cidr_block)
 
 # Refresh and load subnet IDs
-nets = awsvpc.get_all_subnets()
+while nets == None:
+    nets = awsvpc.get_all_subnets()
 if 'subnets' in conf['vpc']:
   for n in conf['vpc']['subnets']:
     net = find_subnet(n, nets)
+    while net == None:
+        print "nets is none"
+        nets = awsvpc.get_all_subnets()
+        net = find_subnet(n, nets)
     vpc_subnetids.append(net.id)
 
 # Public subnet IDs
