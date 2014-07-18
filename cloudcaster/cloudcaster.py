@@ -377,6 +377,7 @@ def find_sg_rule_group(sg_id, owner_id, p_from, p_to, p_prot, rules):
                 # grant is a unicode, use str() for comparison
                 if str(g) == grant:
                     return r
+
     return None
 
 def find_sg_rule_cidr(cidr , p_from, p_to, p_prot, rules):
@@ -538,6 +539,65 @@ for app in conf['apps']:
       rule = find_sg_rule_group(sg.id, sg.owner_id, p_from, p_to, p_prot, sg.rules)
     if verbose:
       print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+
+# default for egress rules is to deny
+# This means dropping the default rule - should we reinstate it if it's missing?
+  if 'egress' in app:
+      for rule in sg.rules_egress:
+          if rule.ip_protocol == '-1' and rule.from_port == None and rule.to_port == None and str(rule.grants[0]) == '0.0.0.0/0':
+              for grant in rule.grants:
+                  awsec2.revoke_security_group_egress(sg.id, rule.ip_protocol, from_port=rule.from_port, to_port=rule.to_port,  cidr_ip=grant)
+                  print "REVOKED DEFAULT ALLOW ALL RULE EGRESS -> %s" % app['name']
+      # copypasta - will refactor the 'allow' variable if wanted
+      # - vjanelle
+      for allow in app['egress']:
+          cidr = allow.get('cidr', None)
+          group = allow.get('group', None)
+
+          if cidr != None and group != None:
+              print "CIDR and group defined:"
+              pprint(allow)
+              sys.exit(2)
+          elif cidr == None and group == None:
+              print "Neither CIDR or group defined!:"
+              pprint(allow)
+              sys.exit(2)
+
+          p_from = allow['from']
+          p_to = allow['to']
+          p_prot = allow['prot']
+
+          if p_prot != 'udp' and p_prot != 'icmp':
+              p_prot = 'tcp'
+
+          # allow to a CIDR
+          if cidr != None:
+              rule = find_sg_rule_cidr(cidr, p_from, p_to, p_prot, sg.rules_egress)
+
+          # allow egress to a SG
+          elif group != None:
+              allowsg = find_sg(group, sgs)
+              rule = find_sg_rule_group(allowsg.id, allowsg.owner_id, p_from, p_to, p_prot, sg.rules_egress)
+
+          if rule == None:
+              # Packed keyword arguments
+              kwargs = {
+                    "group_id": sg.id,
+                    "ip_protocol": p_prot,
+                    "from_port": p_from,
+                    "to_port": p_to
+                    }
+              if cidr != None:
+                  kwargs['cidr_ip'] = cidr
+                  print "Creating SG rule for EGRESS -> CIDR (%s, %s, %s, %s)" % (cidr, p_from, p_to, p_prot)
+              elif group != None:
+                  print "Creating SG rule for EGRESS -> SG (%s, %s, %s, %s)" % (group, p_from, p_to, p_prot)
+                  kwargs['src_group_id'] = allowsg.id
+
+              if awsec2.authorize_security_group_egress(**kwargs) != True:
+                 print "Failed authorizing EGRESS -> (CIDR or SG)"
+                 pprint(allow)
+                 sys.exit(1)
 
   # APP:ALLOW rules
   if 'allow' in app:
