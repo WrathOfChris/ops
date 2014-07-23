@@ -38,6 +38,7 @@ import boto.route53.zone
 import boto.vpc
 import datetime
 import json
+import yaml
 import os
 import re
 import sys
@@ -70,7 +71,7 @@ parser = argparse.ArgumentParser(description="Remove stale AWS launch configurat
 parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
 parser.add_argument("-n", "--dry-run", help="Dry run, noop mode", action="store_true")
 parser.add_argument("-c", "--count", help="max count", type=int)
-parser.add_argument("file", help="cloudcaster JSON file")
+parser.add_argument("file", help="cloudcaster file")
 
 args = parser.parse_args()
 if args.file == None:
@@ -84,7 +85,10 @@ if args.count:
     MAX_COUNT=args.count
 
 conffile = open(args.file).read()
-conf = json.loads(conffile)
+if args.file.lower().endswith(".yaml"):
+    conf = yaml.load(conffile)
+else:
+    conf = json.loads(conffile)
 
 # SETUP BOTO
 awsasg = boto.ec2.autoscale.connect_to_region(conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
