@@ -26,6 +26,6 @@ declare -a tools=(
 )
 
 for tool in "${tools[@]}"; do
-  tool_path=$( cd "$( dirname "$tool" )" && pwd ) 
+  tool_path=$( cd "$( dirname "$tool" )" && pwd )
   [ -f "$tool" ] && ln -sf "$tool_path"/"$(basename $tool)" "$target_dir"
 done
