@@ -1,0 +1,31 @@
+#!/bin/bash
+
+die () {
+    echo >&2 "$@"
+    exit 1
+}
+
+[ "$#" -eq 1 ] || die "Usage: $0 target_dir"
+
+target_dir="$1"
+[ -e "$target_dir" ] || die "Directory $target_dir does not exist"
+[ -d "$target_dir" ] || die "$target_dir is not a directory"
+[ -w "$target_dir" ] || die "Can't write to dorectory $target_dir"
+
+declare -a tools=(
+  awsenv/awsenv
+  cloudcaster/cloudcaster.py
+  ec2autoimage/ec2autoimage
+  ec2cleanami/ec2cleanami.py
+  ec2cleanlc/ec2cleanlc.py
+  ec2createapp/ec2createapp
+  ec2nodefind/ec2nodefind
+  ec2rotatehosts/ec2rotatehosts
+  raxcreateimage/raxcreateimage
+  raxenv/raxenv
+)
+
+for tool in "${tools[@]}"; do
+  tool_path=$( cd "$( dirname "$tool" )" && pwd ) 
+  [ -f "$tool" ] && ln -sf "$tool_path"/"$(basename $tool)" "$target_dir"
+done
