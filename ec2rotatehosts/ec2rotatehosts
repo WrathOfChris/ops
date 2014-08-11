@@ -55,6 +55,7 @@ parser.add_argument("-s", "--sleep", help="wait sleep", default=5)
 parser.add_argument("-T", "--turbo", help="turbo mode", action="store_true", default=False)
 parser.add_argument("-n", "--num", help="number of hosts to rotate, 0 = all",
         type=int, default=0)
+parser.add_argument("-i", "--instance", help="specific instance to rotate")
 parser.add_argument("group", help="autoscale group to rotoate")
 args = parser.parse_args()
 if args.group == None:
@@ -81,21 +82,29 @@ asg = awsasg.get_all_groups([args.group])[0]
 
 capacity = asg.desired_capacity
 
-if verbose:
-  if args.num > 0:
-      print "%s rotating %i/%i instances" % (args.group, args.num, len(asg.instances))
-  else:
-      print "%s rotating %i instances" % (args.group, len(asg.instances))
-  sys.stdout.flush()
-
 # start count of AZ instances
 for az in asg.availability_zones:
   azcount[str(az)] = 0
 
 # store original instance list
 for i in asg.instances:
-  oldinst.append(i.instance_id)
-  azcount[str(i.availability_zone)] += 1
+    # when asked to rotate a single instance, only allow that instance
+    if args.instance and i.instance_id != args.instance:
+        continue
+    oldinst.append(i.instance_id)
+    azcount[str(i.availability_zone)] += 1
+
+if len(oldinst) == 0:
+    print "no instances to rotate, exiting"
+    sys.exit(1)
+
+if verbose:
+    if args.num > 0:
+        print "%s rotating %i/%i instances" % (args.group, args.num,
+                len(oldinst))
+    else:
+        print "%s rotating %i instances" % (args.group, len(oldinst))
+    sys.stdout.flush()
 
 lbs = []
 if asg.load_balancers:
@@ -127,7 +136,7 @@ if not args.turbo:
 #
 # Wait for all instances to register as healthy
 #
-def elb_wait_healthy():
+def elb_wait_healthy(inst=None):
   global asg
 
   if verbose:
@@ -144,8 +153,11 @@ def elb_wait_healthy():
       healths = awselb.describe_instance_health(lb.name)
       healthyneed += len(healths)
       for h in healths:
-        if h.state == u'InService':
-          healthycnt += 1
+          if h.state == u'InService':
+              healthycnt += 1
+          elif inst and str(h.instance_id) == str(inst):
+              # old instance does not count, call it healthy
+              healthycnt += 1
     if healthycnt == healthyneed:
       healthy = True
 
@@ -421,7 +433,7 @@ for thisinst in oldinst:
   elb_wait_registered(thisnewinst)
 
   # wait for all instances in the autoscale group to register healthy
-  elb_wait_healthy()
+  elb_wait_healthy(thisinst)
 
   if startfirst:
       asg_remove_instance(thisinst, elbwait, True)
