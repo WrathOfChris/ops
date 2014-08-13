@@ -519,7 +519,9 @@ for app in conf['apps']:
     p_from = port['from']
     p_to = port['to']
     p_prot = port['prot']
-    if p_prot != 'udp' and p_prot != 'icmp':
+    if p_prot == 'all':
+        p_prot = -1
+    elif p_prot != 'udp' and p_prot != 'icmp':
       p_prot = 'tcp'
 
     # Internal service rule
@@ -567,7 +569,9 @@ for app in conf['apps']:
           p_to = allow['to']
           p_prot = allow['prot']
 
-          if p_prot != 'udp' and p_prot != 'icmp':
+          if p_prot == 'all':
+              p_prot = -1
+          elif p_prot != 'udp' and p_prot != 'icmp':
               p_prot = 'tcp'
 
           # allow to a CIDR
@@ -618,7 +622,9 @@ for app in conf['apps']:
         p_to = allow['to']
         p_prot = allow['prot']
 
-        if p_prot != 'udp' and p_prot != 'icmp':
+        if p_prot == 'all':
+            p_prot = -1
+        elif p_prot != 'udp' and p_prot != 'icmp':
             p_prot = 'tcp'
 
         # ALLOW another APP in
