@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # Copyright (c) 2013 Chris Maxwell <chris@wrathofchris.com>
 # All rights reserved.
