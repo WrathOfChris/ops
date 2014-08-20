@@ -365,6 +365,26 @@ for app in conf['apps']:
   if verbose:
     print "SECGRP-APP %s %s" % (sg.id, sg.name)
 
+  if 'groups' in app:
+        for gname in app['groups']:
+            # skip if already created
+            if 'group' in app and gname == app['group']:
+                continue
+
+            sg = find_sg(gname, sgs)
+            if sg == None:
+                print "Creating Security Group %s for VPC %s app %s" % (
+                        gname, conf['vpc']['cidr'], app['name'])
+                sg = awsec2.create_security_group(gname, gname,
+                        vpc_id = vpc.id)
+                if sg == None:
+                    print "Failed creating SG %s for VPC %s app %s" % (
+                            gname, conf['vpc']['cidr'], app['name'])
+                    sys.exit(1)
+                sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+            if verbose:
+                print "SECGRP-APP %s %s" % (sg.id, sg.name)
+
 #
 # Security Group Rules
 #
@@ -1021,12 +1041,27 @@ for app in conf['apps']:
           print "APP-INST %s %s type %s != %s" % (app['name'], i.id, i.instance_profile, app['role'])
         if verbose:
           print "APP-INST %s %s ami %s type %s host %s %s" % (app['name'], i.id, i.image_id, i.instance_type, i.private_dns_name, i.public_dns_name)
-    sg = find_sg(app['group'], sgs)
 
     # error if we need more instances but have no AMI mapping
     if 'ami' not in app and app['count'] < len(running):
         print "ERROR: APP-INST %s running %d < %d instances with no AMI mapped" % (app['name'])
         sys.exit(1)
+
+    sglist = list()
+    if 'group' in app:
+        sg = find_sg(app['group'], sgs)
+        if not sg:
+            print "SGLIST failed to find SG %s" % app['group']
+            sys.exit(1)
+        sglist.append(str(sg.id))
+    if 'groups' in app:
+        for gname in app['groups']:
+            sg = find_sg(gname, sgs)
+            if not sg:
+                print "SGLIST failed to find SG %s" % gname
+                sys.exit(1)
+            if sg.id not in sglist:
+                sglist.append(str(sg.id))
 
     mapping = None
     if app['type'] in bdmapping:
@@ -1052,7 +1087,7 @@ for app in conf['apps']:
         print "Creating PUBLIC instance %i of %i" % (i + 1, app['count'] - len(running))
         interface = boto.ec2.networkinterface.NetworkInterfaceSpecification(
             subnet_id=vpc_pubsubnetids[subnetidx],
-            groups=[ str(sg.id) ],
+            groups=sglist,
             associate_public_ip_address=True)
         interfaces = boto.ec2.networkinterface.NetworkInterfaceCollection(interface)
         resv = awsec2.run_instances(
@@ -1075,7 +1110,7 @@ for app in conf['apps']:
           min_count = 1,
           max_count = 1,
           key_name = app['keypair'],
-          security_group_ids = [ str(sg.id) ],
+          security_group_ids = sglist,
           instance_type = app['type'],
           subnet_id = vpc_subnetids[subnetidx],
           block_device_map = mapping,
@@ -1206,7 +1241,22 @@ nowstr = now.strftime("%Y%m%d%H%M%S")
 
 for app in conf['apps']:
   if 'autoscale' in app:
-    sg = find_sg(app['group'], sgs)
+    sglist = list()
+    if 'group' in app:
+        sg = find_sg(app['group'], sgs)
+        if not sg:
+            print "SGLIST failed to find SG %s" % app['group']
+            sys.exit(1)
+        sglist.append(str(sg.id))
+    if 'groups' in app:
+        for gname in app['groups']:
+            sg = find_sg(gname, sgs)
+            if not sg:
+                print "SGLIST failed to find SG %s" % gname
+                sys.exit(1)
+            if sg.id not in sglist:
+                sglist.append(str(sg.id))
+
     asgname = "%s-%s" % (app['name'], conf['aws']['env'])
     asgnamefull = "%s-%s" % (asgname, nowstr)
     asconfigs = sorted(really_get_all_launch_configurations(), key=lambda a: a.name, reverse=True)
@@ -1246,7 +1296,7 @@ for app in conf['apps']:
       print "Creating Launch Config %s" % asgnamefull
       lc = boto.ec2.autoscale.LaunchConfiguration(
           name = asgnamefull,
-          security_groups = [ str(sg.id) ],
+          security_groups = sglist,
           image_id = app['ami'],
           key_name = app['keypair'],
           instance_type = app['type'],
