@@ -1055,12 +1055,13 @@ for app in conf['apps']:
             sys.exit(1)
         sglist.append(str(sg.id))
     if 'groups' in app:
-        for gname in app:
+        for gname in app['groups']:
             sg = find_sg(gname, sgs)
             if not sg:
                 print "SGLIST failed to find SG %s" % gname
                 sys.exit(1)
-            sglist.append(str(sg.id))
+            if sg.id not in sglist:
+                sglist.append(str(sg.id))
 
     mapping = None
     if app['type'] in bdmapping:
@@ -1248,12 +1249,14 @@ for app in conf['apps']:
             sys.exit(1)
         sglist.append(str(sg.id))
     if 'groups' in app:
-        for gname in app:
+        for gname in app['groups']:
             sg = find_sg(gname, sgs)
             if not sg:
                 print "SGLIST failed to find SG %s" % gname
                 sys.exit(1)
-            sglist.append(str(sg.id))
+            if sg.id not in sglist:
+                sglist.append(str(sg.id))
+
     asgname = "%s-%s" % (app['name'], conf['aws']['env'])
     asgnamefull = "%s-%s" % (asgname, nowstr)
     asconfigs = sorted(really_get_all_launch_configurations(), key=lambda a: a.name, reverse=True)

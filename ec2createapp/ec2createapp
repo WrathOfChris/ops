@@ -179,12 +179,13 @@ for app in conf['apps']:
           sys.exit(1)
       sglist.append(str(sg.id))
   if 'groups' in app:
-      for gname in app:
+      for gname in app['groups']:
           sg = find_sg(gname, sgs)
           if not sg:
               print "SGLIST failed to find SG %s" % gname
               sys.exit(1)
-          sglist.append(str(sg.id))
+          if sg.id not in sglist:
+              sglist.append(str(sg.id))
 
   # public ip requested
   publicip = False
