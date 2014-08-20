@@ -171,7 +171,20 @@ for app in conf['apps']:
   vpc_subnetids = []
   vpc_pubsubnetids = []
   sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-  sg = find_sg(app['group'], sgs)
+  sglist = list()
+  if 'group' in app:
+      sg = find_sg(app['group'], sgs)
+      if not sg:
+          print "SGLIST failed to find SG %s" % app['group']
+          sys.exit(1)
+      sglist.append(str(sg.id))
+  if 'groups' in app:
+      for gname in app:
+          sg = find_sg(gname, sgs)
+          if not sg:
+              print "SGLIST failed to find SG %s" % gname
+              sys.exit(1)
+          sglist.append(str(sg.id))
 
   # public ip requested
   publicip = False
@@ -240,7 +253,7 @@ for app in conf['apps']:
   print "Creating Launch Config %s" % asgnamefull
   lc = boto.ec2.autoscale.LaunchConfiguration(
       name = asgnamefull,
-      security_groups = [ str(sg.id) ],
+      security_groups = sglist,
       image_id = app['ami'],
       key_name = app['keypair'],
       instance_type = app['type'],
