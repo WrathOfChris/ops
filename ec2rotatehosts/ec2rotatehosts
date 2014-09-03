@@ -78,7 +78,12 @@ if verbose:
   print "%s rotating autoscale group in %s with count %i" % (args.group, args.region, args.count)
   sys.stdout.flush()
 
-asg = awsasg.get_all_groups([args.group])[0]
+all_groups = awsasg.get_all_groups([args.group])
+if len(all_groups) == 0:
+    print "no groups found matching %s, exiting" % (args.group)
+    sys.exit(1)
+
+asg = all_groups[0]
 
 capacity = asg.desired_capacity
 
