@@ -64,11 +64,14 @@ parser.add_argument("-f", "--filename", help="file to write")
 parser.add_argument("-r", "--region", help="ec2 region")
 args = parser.parse_args()
 
-if not args.region:
-    if args.auto:
-        identity = boto.utils.get_instance_identity()
-        args.region = identity['document']['region']
-    else:
+if args.auto:
+    identity = boto.utils.get_instance_identity()
+    local_region = identity['document']['region']
+    if not args.region:
+        args.region = local_region
+else:
+    local_region = args.region
+    if not args.region:
         args.region = 'us-east-1'
 
 awsec2 = boto.ec2.connect_to_region(args.region, aws_access_key_id=aws_key,
@@ -81,7 +84,12 @@ tagfilter = { 'instance-state-name': 'running',
 if args.auto == True:
   meta = boto.utils.get_instance_metadata()
   myinstfilter = { 'resource-id': meta['instance-id'] }
-  tags = awsec2.get_all_tags(myinstfilter)
+  if str(local_region) != str(args.region):
+      localec2 = boto.ec2.connect_to_region(local_region,
+              aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
+      tags = localec2.get_all_tags(myinstfilter)
+  else:
+      tags = awsec2.get_all_tags(myinstfilter)
   for t in tags:
     if t.name == envtag:
       tagfilter['tag:%s' % envtag] = t.value
