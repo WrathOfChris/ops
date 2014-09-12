@@ -71,6 +71,7 @@ parser = argparse.ArgumentParser(description="Remove stale AWS launch configurat
 parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
 parser.add_argument("-n", "--dry-run", help="Dry run, noop mode", action="store_true")
 parser.add_argument("-c", "--count", help="max count", type=int)
+parser.add_argument("-s", "--sleep", help="millisec to delay vs rate limit throttling", type=int)
 parser.add_argument("file", help="cloudcaster file")
 
 args = parser.parse_args()
@@ -83,7 +84,8 @@ dry_run = args.dry_run
 
 if args.count:
     MAX_COUNT=args.count
-
+if args.sleep:
+    SLEEP_MS=args.sleep
 conffile = open(args.file).read()
 if args.file.lower().endswith(".yaml"):
     conf = yaml.load(conffile)
@@ -157,4 +159,6 @@ for lc_name in lcname_to_date:
                 print "-> WOULD DELETE %s" % ( lc )
             else:
                 res = awsasg.delete_launch_configuration(lc)
+            if args.sleep:
+              time.sleep(float(SLEEP_MS/1000))
 
