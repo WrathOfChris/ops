@@ -78,8 +78,10 @@ if args.auto:
 
     identity = boto.utils.get_instance_identity()
     workregion = identity['document']['region']
-if args.region:
-    workregion = args.region
+else:
+    # not auto, region set manually
+    if args.region:
+        workregion = args.region
 
 awsec2 = boto.ec2.connect_to_region(workregion, aws_access_key_id=aws_key,
         aws_secret_access_key=aws_secret)
@@ -109,6 +111,12 @@ if not svc:
 if not env:
     print "environ tag not present"
     sys.exit(1)
+
+# reconnect to working region if needed
+if args.auto and args.region and workregion != args.region:
+    workregion = args.region
+    awsec2 = boto.ec2.connect_to_region(workregion, aws_access_key_id=aws_key,
+            aws_secret_access_key=aws_secret)
 
 # read a list of regions, or default to just own region
 if args.filename:
