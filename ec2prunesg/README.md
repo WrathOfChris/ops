@@ -4,7 +4,7 @@
 **ec2prunesg** - ec2 security group pruning tool
 
 ## SYNOPSIS
-**ec2prunesg** [-aD] [-s service] [-e environ] [-c cluster] [-f regionfile]
+**ec2prunesg** [-aDv] [-s service] [-e environ] [-c cluster] [-f regionfile]
 [-r region] regions...
 
 ## DESCRIPTION
@@ -26,6 +26,7 @@ not both
 ## OPTIONS
 * **-a** enable autodiscovery from instance metadata of (environ, service, cluster)
 * **-D** dry run - print intended actions but do not prune security groups
+* **-v** be verbose
 * **-e environ** specify environment value ie: (dev, stage, prod)
 * **-s service** specify service name
 * **-c cluster** specify cluster selector

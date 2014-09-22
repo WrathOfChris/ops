@@ -69,6 +69,8 @@ parser.add_argument("-f", "--filename", help="regions list")
 parser.add_argument("-e", "--environ", help="environment tag")
 parser.add_argument("-r", "--region", help="ec2 region")
 parser.add_argument("-s", "--service", help="service tag")
+parser.add_argument("-v", "--verbose", help="be verbose",
+        action="store_true")
 parser.add_argument("regions", nargs='*', help="list of regions")
 args = parser.parse_args()
 
@@ -146,8 +148,10 @@ sgname = "%s-%s-%s" % (svc, workregion, env)
 sgfilter = { "group-name": sgname }
 
 # iterate through region list, finding security group to prune
+errors = 0
 for region in regions:
-    print "pruning security group %s in region %s" % (sgname, region)
+    if args.verbose:
+        print "pruning security group %s in region %s" % (sgname, region)
     awsec2 = boto.ec2.connect_to_region(region, aws_access_key_id=aws_key,
             aws_secret_access_key=aws_secret)
     sgs = awsec2.get_all_security_groups(filters=sgfilter)
@@ -156,8 +160,9 @@ for region in regions:
             for grant in rule.grants:
                 # grant is a unicode, use str() for comparison
                 if str(grant) not in clusterhosts:
-                    print "pruning rule for %s -> %s port %s in %s" % \
-                            (str(grant), sgname, rule.to_port, region)
+                    if args.verbose:
+                        print "pruning rule for %s -> %s port %s in %s" % \
+                                (str(grant), sgname, rule.to_port, region)
                     if args.dryrun:
                         continue
                     if awsec2.revoke_security_group(group_id = sg.id,
@@ -168,4 +173,7 @@ for region in regions:
                             ) != True:
                         print "failed revoking %s -> %s port %d in %s" % \
                                 (str(grant), sgname, rule.to_port, region)
-                        sys.exit(1)
+                        errors += 1
+
+if errors > 0:
+    sys.exit(1)
