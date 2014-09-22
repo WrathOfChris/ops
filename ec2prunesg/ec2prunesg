@@ -1,0 +1,163 @@
+#!/usr/bin/env python
+#
+# Copyright (c) 2014 Chris Maxwell <chris@wrathofchris.com>
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+# this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+# this list of conditions and the following disclaimer in the documentation
+# and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+#
+# - Find instances matching service/environ/cluster
+# - Find security group matching service-region-environ in all regions
+# - Prune rules not matching current instances by public IP
+#
+# Usage:
+#   # To prune groups in us-east-1 from clusters in (us-east-1, us-west-2)
+#   ec2prunesg -r us-east-1 -s test-cass -e stage us-east-1 us-west-2
+#
+#   # To prune groups in us-west-2 from clusters in (us-east-1, us-west-2)
+#   ec2prunesg -r us-west-2 -s test-cass -e stage us-east-1 us-west-2
+#
+import argparse
+import boto
+import boto.ec2
+import json
+import os, sys
+
+envtag = 'env'
+svctag = 'service'
+clutag = 'cluster'
+env = None
+svc = None
+clu = None
+workregion = 'us-east-1'
+awsec2 = None
+clusterhosts = list()
+
+aws_key = None
+aws_secret = None
+if 'AWS_ACCESS_KEY' in os.environ:
+  aws_key = os.environ['AWS_ACCESS_KEY']
+if 'AWS_SECRET_KEY' in os.environ:
+  aws_secret = os.environ['AWS_SECRET_KEY']
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-a", "--auto", help="auto-detect (env,service,cluster)",
+        action="store_true")
+parser.add_argument("-c", "--cluster", help="cluster tag")
+parser.add_argument("-D", "--dryrun", help="list but do not prune",
+        action="store_true")
+parser.add_argument("-f", "--filename", help="regions list")
+parser.add_argument("-e", "--environ", help="environment tag")
+parser.add_argument("-r", "--region", help="ec2 region")
+parser.add_argument("-s", "--service", help="service tag")
+parser.add_argument("regions", nargs='*', help="list of regions")
+args = parser.parse_args()
+
+if args.auto:
+    meta = boto.utils.get_instance_metadata()
+    myinstfilter = { 'resource-id': meta['instance-id'] }
+
+    identity = boto.utils.get_instance_identity()
+    workregion = identity['document']['region']
+if args.region:
+    workregion = args.region
+
+awsec2 = boto.ec2.connect_to_region(workregion, aws_access_key_id=aws_key,
+        aws_secret_access_key=aws_secret)
+
+# get instance tag info
+if args.auto:
+    tags = awsec2.get_all_tags(myinstfilter)
+    for t in tags:
+      if t.name == envtag:
+        env = t.value
+      elif t.name == svctag:
+        svc = t.value
+      elif t.name == clutag:
+        clu = t.value
+
+# commandline overrides autodiscovery
+if args.service:
+    svc = args.service
+if args.cluster:
+    clu = args.cluster
+if args.environ:
+    env = args.environ
+
+if not svc:
+    print "service tag not present"
+    sys.exit(1)
+if not env:
+    print "environ tag not present"
+    sys.exit(1)
+
+# read a list of regions, or default to just own region
+if args.filename:
+    with open(args.filename) as f:
+        regions = f.read().splitlines()
+else:
+    if args.regions:
+        regions = args.regions
+    else:
+        regions = [ workregion ]
+
+instfilter = {
+        'instance-state-name': 'running',
+        'tag:%s' % svctag: svc,
+        'tag:%s' % envtag: env
+}
+if clu != None:
+    instfilter['tag:%s' % clutag] = clu
+
+instances = awsec2.get_only_instances(filters=instfilter)
+for i in instances:
+    if i.ip_address:
+        clusterhosts.append("%s/32" % str(i.ip_address))
+
+# ie: myservice-us-east-1-stage
+sgname = "%s-%s-%s" % (svc, workregion, env)
+sgfilter = { "group-name": sgname }
+
+# iterate through region list, finding security group to prune
+for region in regions:
+    print "pruning security group %s in region %s" % (sgname, region)
+    awsec2 = boto.ec2.connect_to_region(region, aws_access_key_id=aws_key,
+            aws_secret_access_key=aws_secret)
+    sgs = awsec2.get_all_security_groups(filters=sgfilter)
+    for sg in sgs:
+        for rule in sg.rules:
+            for grant in rule.grants:
+                # grant is a unicode, use str() for comparison
+                if str(grant) not in clusterhosts:
+                    print "pruning rule for %s -> %s port %s in %s" % \
+                            (str(grant), sgname, rule.to_port, region)
+                    if args.dryrun:
+                        continue
+                    if awsec2.revoke_security_group(group_id = sg.id,
+                            cidr_ip = str(grant),
+                            ip_protocol = rule.ip_protocol,
+                            from_port = rule.from_port,
+                            to_port = rule.to_port
+                            ) != True:
+                        print "failed revoking %s -> %s port %d in %s" % \
+                                (str(grant), sgname, rule.to_port, region)
+                        sys.exit(1)
