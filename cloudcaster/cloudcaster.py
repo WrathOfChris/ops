@@ -1386,27 +1386,34 @@ for app in conf['apps']:
         for i in ag.instances:
           print "APP-ASINST %s %s" % (ag.name, i.instance_id)
 
+    # 2014-10: Autoscale Group updating s considered harmful and disabled.
+    #          In a team with multiple people updating the specification, it
+    #          becomes a coordination problem to avoid stomping on each others'
+    #          changes.  Revisit when a better process is in place.
+    #          Until then, use awscli to update ASG min/max/desired
     ag_update = 0
     if ag.launch_config_name != lc.name:
       print "Updating Autoscaling Group Launch Config %s -> %s" % (ag.launch_config_name, lc.name)
       ag.launch_config_name = lc.name
       ag_update = 1
     if ag.min_size != app['autoscale']['min']:
-      print "Updating Autoscaling Group minimum %d -> %d" % (ag.min_size, app['autoscale']['min'])
-      ag.min_size = app['autoscale']['min']
-      ag_update = 1
+        print "WARNING: not updating Autoscaling Group %s minimum %d -> %d" % (
+                app['name'], ag.min_size, app['autoscale']['min'])
+        # future: re-enable autoscale group updates
+        #ag.min_size = app['autoscale']['min']
+        #ag_update = 1
     if ag.max_size != app['autoscale']['max']:
-      print "Updating Autoscaling Group maximum %d -> %d" % (ag.max_size, app['autoscale']['max'])
-      ag.max_size = app['autoscale']['max']
-      ag_update = 1
+        print "WARNING: not updating Autoscaling Group %s maximum %d -> %d" % (
+                app['name'], ag.max_size, app['autoscale']['max'])
+        # future: re-enable autoscale group updates
+        #ag.max_size = app['autoscale']['max']
+        #ag_update = 1
     if ag.desired_capacity != None and 'count' in app and ag.desired_capacity != app['count']:
-        if ag.desired_capacity > app['count']:
-            print "WARNING: not decrementing autoscale group %s from %d -> %d" % (
-                    app['name'], ag.desired_capacity, app['count'])
-        else:
-            print "Updating Autoscaling Group capacity %d -> %d" % (ag.desired_capacity, app['count'])
-            ag.desired_capacity = app['count']
-            ag_update = 1
+        print "WARNING: not updating Autoscale Group %s from %d -> %d" % (
+                app['name'], ag.desired_capacity, app['count'])
+        # future: re-enable autoscale group updates
+        #ag.desired_capacity = app['count']
+        #ag_update = 1
     if ag_update == 1:
       req = ag.update()
 
