@@ -147,6 +147,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
       "healthy": 3,
       "unhealthy": 5,
       "target": "HTTP:80/"
+      "nocrossaz": "yes"
     }
   ]
 ```
@@ -161,6 +162,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 * **elbs[].healthy** - number of healthy polls required to return to service
 * **elbs[].unhealthy** - number of unhealthy polls before instance is removed from rotation
 * **elbs[].target** - the ELB healthcheck target.  See [ELB - Configuring Health Checks](http://docs.aws.amazon.com/ElasticLoadBalancing/latest/DeveloperGuide/gs-ec2classic.html#ConfigureHealthCheck) for more information.
+* **elbs[].nocrossaz** - turns off the ELB cross-az load balancing
 
 ### apps
 "apps": [ {}, {} ]

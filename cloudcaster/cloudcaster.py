@@ -535,6 +535,8 @@ for app in conf['apps']:
                             rule.to_port)
 
   # APP:APP rules
+  if app['ports'] == None:
+      print "{} does not have ports?".format(app['name'])
   for port in app['ports']:
     p_from = port['from']
     p_to = port['to']
@@ -907,9 +909,12 @@ for confelb in conf['elbs']:
     for l in elb.listeners:
       print "ELB-LISTEN %s %s/%s -> %s/%s" % (elb.name, l[0], l[2], l[1], l[4])
 
-  if elb != None and elb.is_cross_zone_load_balancing() != True:
+  if elb != None and elb.is_cross_zone_load_balancing() != True and 'nocrossaz' not in confelb:
     print "ELB %s enabling cross-zone load balancing" % (elb.name)
     elb.enable_cross_zone_load_balancing()
+  elif 'nocrossaz' in confelb and elb.is_cross_zone_load_balancing():
+      print "ELB %s disabling cross-zone load balancing" % (elb.name)
+      elb.disable_cross_zone_load_balancing()
 
   #
   # ELB Listeners
