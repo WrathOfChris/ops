@@ -912,7 +912,7 @@ for confelb in conf['elbs']:
   if elb != None and elb.is_cross_zone_load_balancing() != True and 'nocrossaz' not in confelb:
     print "ELB %s enabling cross-zone load balancing" % (elb.name)
     elb.enable_cross_zone_load_balancing()
-  elif 'nocrossaz' in confelb:
+  elif 'nocrossaz' in confelb and elb.is_cross_zone_load_balancing():
       print "ELB %s disabling cross-zone load balancing" % (elb.name)
       elb.disable_cross_zone_load_balancing()
 
