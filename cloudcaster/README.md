@@ -217,6 +217,9 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 * **apps[].azlimit** - single AZ to limit placement of instances
 * **apps[].intaddrs** - array of static internal IPs to be assigned to
   instances once running.  May take a second pass due to startup delays.
+* **apps[].userdata** - String which contains the userdata to be passed
+  into the launch configuration.  Intended for appliances that require
+  personalization codes or license keys.
 
 ## NETWORK
 Cloudcaster creates a VPC network as follows:
