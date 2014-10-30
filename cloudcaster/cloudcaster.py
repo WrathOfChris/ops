@@ -1324,15 +1324,32 @@ for app in conf['apps']:
         asconfigs = sorted(
             really_get_all_launch_configurations(), key=lambda a: a.name, reverse=True)
         lc = find_launch(asgname, asconfigs)
-        if lc != None and 'ami' in app and lc.image_id != app['ami']:
-            print "APP-LAUNCH %s ami %s != %s" % (lc.name, lc.image_id, app['ami'])
-            lc = None
-        if lc != None and lc.instance_type != app['type']:
-            print "APP-LAUNCH %s type %s != %s" % (lc.name, lc.instance_type, app['type'])
-            lc = None
-        if lc != None and lc.key_name != app['keypair']:
-            print "APP-LAUNCH %s key %s != %s" % (lc.name, lc.key_name, app['keypair'])
-            lc = None
+        lc_ok = False
+        while lc != None and lc_ok == False:
+            if 'ami' in app and lc.image_id != app['ami']:
+                print "APP-LAUNCH %s ami %s != %s" % (lc.name, lc.image_id, app['ami'])
+                lc = None
+                break
+            elif lc.instance_type != app['type']:
+                print "APP-LAUNCH %s type %s != %s" % (lc.name, lc.instance_type, app['type'])
+                lc = None
+                break
+            elif lc.key_name != app['keypair']:
+                print "APP-LAUNCH %s key %s != %s" % (lc.name, lc.key_name, app['keypair'])
+                lc = None
+                break
+            # If the config has userdata, but the latest LC doesn't, create a new config
+            elif 'userdata' in app and str(lc.user_data) != app['userdata']:
+                print "APP-LAUNCH %s userdata does not match!" % ( lc.name )
+                lc = None
+                break
+            # If the lc has userdata, but the config does not, create a new config
+            elif 'userdata' not in app and str(lc.user_data) != '':
+                print "APP-LAUNCH %s has userdata, but config does not!" % (lc.name)
+                lc = None
+                break
+            lc_ok = True
+
         if lc == None:
             if 'ami' not in app:
                 print "ERROR: APP-LAUNCH %s cannot create updated LaunchConfig without AMI mapping" % app['name']
@@ -1357,17 +1374,22 @@ for app in conf['apps']:
                     if verbose:
                         print "APP-INST block device mapping %s to %s" % (mapping[devname].ephemeral_name, devname)
 
+            lckwargs = {
+                 "name": asgnamefull,
+                 "security_groups": sglist,
+                 "image_id": app['ami'],
+                 "key_name": app['keypair'],
+                 "instance_type": app['type'],
+                 "instance_profile_name": app['role'],
+                 "block_device_mappings": [mapping],
+                 "associate_public_ip_address": publicip
+            }
+
+            if 'userdata' in app:
+                lckwargs["user_data"] = app['userdata']
+
             print "Creating Launch Config %s" % asgnamefull
-            lc = boto.ec2.autoscale.LaunchConfiguration(
-                name=asgnamefull,
-                security_groups=sglist,
-                image_id=app['ami'],
-                key_name=app['keypair'],
-                instance_type=app['type'],
-                instance_profile_name=app['role'],
-                block_device_mappings=[mapping],
-                associate_public_ip_address=publicip
-            )
+            lc = boto.ec2.autoscale.LaunchConfiguration(**lckwargs)
             req = awsasg.create_launch_configuration(lc)
             if req == None:
                 print "Failed creating launch configuration"
