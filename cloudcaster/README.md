@@ -163,6 +163,7 @@ Cloudcaster uses JSON as a specification for the cloud environment to create.  A
 * **elbs[].unhealthy** - number of unhealthy polls before instance is removed from rotation
 * **elbs[].target** - the ELB healthcheck target.  See [ELB - Configuring Health Checks](http://docs.aws.amazon.com/ElasticLoadBalancing/latest/DeveloperGuide/gs-ec2classic.html#ConfigureHealthCheck) for more information.
 * **elbs[].nocrossaz** - turns off the ELB cross-az load balancing
+* **elbs[].idle_timeout** - manually set idle timeout on ELB
 
 ### apps
 "apps": [ {}, {} ]
