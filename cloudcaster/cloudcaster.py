@@ -41,6 +41,7 @@ if LooseVersion(boto.Version) < LooseVersion("2.34.0"):
 import boto.ec2
 import boto.ec2.autoscale
 import boto.ec2.elb
+import boto.ec2.elb.attributes
 import boto.route53
 import boto.route53.zone
 import boto.sts
@@ -932,6 +933,7 @@ for confelb in conf['elbs']:
     myname = "%s-%s" % (confelb['name'], conf['aws']['env'])
     elb_sg = find_sg(confelb['group'], sgs)
     elb = find_elb(myname, elbs)
+
     if elb == None:
         print "Creating ELB %s" % myname
         hc = boto.ec2.elb.HealthCheck(
@@ -949,6 +951,16 @@ for confelb in conf['elbs']:
                                           scheme=elb_scheme,
                                           security_groups=str(elb_sg.id)
                                           )
+        if 'idle_timeout' in confelb and elb:
+            elb_attr = boto.ec2.elb.attributes.ConnectionSettingAttribute(
+                myname
+            )
+            timeout = confelb['idle_timeout']
+            elb_attr.endElement('IdleTimeout', timeout, None)
+            attr = "connectingsettings"
+            if not elb.connection.modify_lb_attribute(myname, attr, elb_attr):
+                print "Failed modifying ELB settings %s" % myname
+                sys.exit(1)
         if elb == None:
             print "Failed creating ELB %s" % myname
             sys.exit(1)

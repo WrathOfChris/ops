@@ -48,7 +48,8 @@
       "interval": 20,
       "healthy": 3,
       "unhealthy": 5,
-      "target": "HTTP:80/"
+      "target": "HTTP:80/",
+      "idle_timeout": 3600  
     }
   ],
 
