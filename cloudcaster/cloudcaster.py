@@ -28,7 +28,16 @@
 # Thanks to Mahesh Paolini-Subramanya (@dieswaytoofast) for his help
 #
 import argparse
-import boto
+import sys
+try:
+    import boto
+except ImportError:
+    print 'boto required'
+    sys.exit(1)
+from distutils.version import LooseVersion
+if LooseVersion(boto.Version) < LooseVersion("2.34.0"):
+    print 'boto >= 2.34.0 required'
+    sys.exit(1)
 import boto.ec2
 import boto.ec2.autoscale
 import boto.ec2.elb
@@ -40,7 +49,6 @@ import datetime
 import json
 import os
 import re
-import sys
 import time
 import yaml
 import copy
@@ -953,7 +961,7 @@ for confelb in conf['elbs']:
     if verbose:
         print "ELB %s dns %s" % (elb.name, elb.dns_name)
         for l in elb.listeners:
-            print "ELB-LISTEN %s %s/%s -> %s/%s" % (elb.name, l[0], l[2], l[1], l[4])
+            print "ELB-LISTEN %s %s/%s -> %s/%s" % (elb.name, l[0], l[2], l[1], l[3])
 
     if elb != None and elb.is_cross_zone_load_balancing() != True and 'nocrossaz' not in confelb:
         print "ELB %s enabling cross-zone load balancing" % (elb.name)
@@ -968,10 +976,7 @@ for confelb in conf['elbs']:
 
     def find_elb_listener(find, listeners):
         for l in listeners:
-            # XXX boto counts 0,1,2,4 for some reason.  Seriously.  WTF!
-            # XXX
-            # https://github.com/boto/boto/blob/develop/boto/ec2/elb/listener.py#L83-84
-            if l[0] == find[0] and l[1] == find[1] and l[2].lower() == find[2].lower() and l[4].lower() == find[3].lower():
+            if l[0] == find[0] and l[1] == find[1] and l[2].lower() == find[2].lower() and l[3].lower() == find[3].lower():
                 return l
         return None
 
@@ -992,7 +997,7 @@ for confelb in conf['elbs']:
             sys.exit(1)
         if verbose:
             for l in l_missing:
-                print "ELB-LISTEN %s %s/%s -> %s/%s" % (elb.name, l[0], l[2], l[1], l[4])
+                print "ELB-LISTEN %s %s/%s -> %s/%s" % (elb.name, l[0], l[2], l[1], l[3])
 
 #
 # BLOCK DEVICE MAPPINGS - http://aws.amazon.com/ec2/instance-types/
