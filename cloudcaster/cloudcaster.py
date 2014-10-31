@@ -1355,6 +1355,10 @@ for app in conf['apps']:
                 print "APP-LAUNCH %s key %s != %s" % (lc.name, lc.key_name, app['keypair'])
                 lc = None
                 break
+            elif lc.instance_profile_name != app['role']:
+                print "APP-LAUNCH %s role %s != %s" % ( lc.name, lc.instance_profile_name, app['role'] )
+                lc = None
+                break
             # If the config has userdata, but the latest LC doesn't, create a new config
             elif 'userdata' in app and str(lc.user_data) != app['userdata']:
                 print "APP-LAUNCH %s userdata does not match!" % ( lc.name )
