@@ -28,7 +28,16 @@
 # Thanks to Mahesh Paolini-Subramanya (@dieswaytoofast) for his help
 #
 import argparse
-import boto
+import sys
+try:
+    import boto
+except ImportError:
+    print 'boto required'
+    sys.exit(1)
+from distutils.version import LooseVersion
+if LooseVersion(boto.Version) < LooseVersion("2.34.0"):
+    print 'boto >= 2.34.0 required'
+    sys.exit(1)
 import boto.ec2
 import boto.ec2.autoscale
 import boto.ec2.elb
@@ -40,7 +49,6 @@ import datetime
 import json
 import os
 import re
-import sys
 import time
 import yaml
 import copy
