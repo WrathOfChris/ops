@@ -934,31 +934,22 @@ for confelb in conf['elbs']:
     elb_sg = find_sg(confelb['group'], sgs)
     elb = find_elb(myname, elbs)
 
-    elb_attr = awselb.get_all_lb_attributes(elb.name)
+    if elb != None:
+        elb_attr = awselb.get_all_lb_attributes(elb.name)
 
-    if 'idle_timeout' not in confelb and elb_attr.connecting_settings.idle_timeout != 60:
-        print "Idle timeout on %s not set to 60s" % ( elb.name )
-        elb_attr = boto.ec2.elb.attributes.ConnectionSettingAttribute(
-            myname
-        )
-        timeout = 60
-        elb_attr.endElement('IdleTimeout', timeout, None)
-        attr = "connectingsettings"
-        if not elb.connection.modify_lb_attribute(myname, attr, elb_attr):
-            print "Failed modifying ELB settings %s" % myname
-            sys.exit(1)
-
-    if 'idle_timeout' in confelb and elb_attr.connecting_settings.idle_timeout != confelb['idle_timeout']:
-        print "Idle timeout on %s not set to %s" % ( elb.name, confelb['idle_timeout'] )
-        elb_attr = boto.ec2.elb.attributes.ConnectionSettingAttribute(
-            myname
-        )
-        timeout = confelb['idle_timeout']
-        elb_attr.endElement('IdleTimeout', timeout, None)
-        attr = "connectingsettings"
-        if not elb.connection.modify_lb_attribute(myname, attr, elb_attr):
-            print "Failed modifying ELB settings %s" % myname
-            sys.exit(1)
+        if 'idle_timeout' in confelb and elb_attr.connecting_settings.idle_timeout != confelb['idle_timeout'] and elb_attr.connecting_settings.idle_timeout == 60:
+            print "Idle timeout on %s not set to %s" % (elb.name, confelb['idle_timeout'])
+            elb_attr = boto.ec2.elb.attributes.ConnectionSettingAttribute(
+                myname
+            )
+            timeout = confelb['idle_timeout']
+            elb_attr.endElement('IdleTimeout', timeout, None)
+            attr = "connectingsettings"
+            if not elb.connection.modify_lb_attribute(myname, attr, elb_attr):
+                print "Failed modifying ELB settings %s" % myname
+                sys.exit(1)
+        else:
+            print "WARNING: %s timeout set to %s, and config says %s!!!!!!!" % (elb.name, elb_attr.connecting_settings.idle_timeout, confelb['idle_timeout'])
 
     if elb == None:
         print "Creating ELB %s" % myname
@@ -1382,15 +1373,17 @@ for app in conf['apps']:
                 lc = None
                 break
             elif lc.instance_profile_name != app['role']:
-                print "APP-LAUNCH %s role %s != %s" % ( lc.name, lc.instance_profile_name, app['role'] )
+                print "APP-LAUNCH %s role %s != %s" % (lc.name, lc.instance_profile_name, app['role'])
                 lc = None
                 break
-            # If the config has userdata, but the latest LC doesn't, create a new config
+            # If the config has userdata, but the latest LC doesn't, create a
+            # new config
             elif 'userdata' in app and str(lc.user_data) != app['userdata']:
-                print "APP-LAUNCH %s userdata does not match!" % ( lc.name )
+                print "APP-LAUNCH %s userdata does not match!" % (lc.name)
                 lc = None
                 break
-            # If the lc has userdata, but the config does not, create a new config
+            # If the lc has userdata, but the config does not, create a new
+            # config
             elif 'userdata' not in app and str(lc.user_data) != '':
                 print "APP-LAUNCH %s has userdata, but config does not!" % (lc.name)
                 lc = None
@@ -1422,14 +1415,14 @@ for app in conf['apps']:
                         print "APP-INST block device mapping %s to %s" % (mapping[devname].ephemeral_name, devname)
 
             lckwargs = {
-                 "name": asgnamefull,
-                 "security_groups": sglist,
-                 "image_id": app['ami'],
-                 "key_name": app['keypair'],
-                 "instance_type": app['type'],
-                 "instance_profile_name": app['role'],
-                 "block_device_mappings": [mapping],
-                 "associate_public_ip_address": publicip
+                "name": asgnamefull,
+                "security_groups": sglist,
+                "image_id": app['ami'],
+                "key_name": app['keypair'],
+                "instance_type": app['type'],
+                "instance_profile_name": app['role'],
+                "block_device_mappings": [mapping],
+                "associate_public_ip_address": publicip
             }
 
             if 'userdata' in app:
