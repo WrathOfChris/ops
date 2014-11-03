@@ -936,8 +936,6 @@ for confelb in conf['elbs']:
 
     elb_attr = awselb.get_all_lb_attributes(elb.name)
 
-    pprint(elb_attr.connecting_settings.idle_timeout)
-
     if 'idle_timeout' not in confelb and elb_attr.connecting_settings.idle_timeout != 60:
         print "Idle timeout on %s not set to 60s" % ( elb.name )
         elb_attr = boto.ec2.elb.attributes.ConnectionSettingAttribute(
