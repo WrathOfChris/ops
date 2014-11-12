@@ -1175,6 +1175,11 @@ for app in conf['apps']:
         instances = []
         for i in range(app['count'] - len(running)):
             subnetidx = (i + len(running)) % len(vpc_subnetids)
+            key_name = None
+            if 'keypair' in app:
+                key_name = app['keypair']
+            else:
+                print "WARNING, creating %s without a keypair!!" % ( app['name'] )
             if 'azlimit' in app:
                 subnetidx = conf['vpc']['azs'].index(app['azlimit'])
             if 'public' in app:
@@ -1190,7 +1195,7 @@ for app in conf['apps']:
                     image_id=app['ami'],
                     min_count=1,
                     max_count=1,
-                    key_name=app['keypair'],
+                    key_name=key_name,
                     instance_type=app['type'],
                     network_interfaces=interfaces,
                     block_device_map=mapping,
@@ -1204,7 +1209,7 @@ for app in conf['apps']:
                     image_id=app['ami'],
                     min_count=1,
                     max_count=1,
-                    key_name=app['keypair'],
+                    key_name=key_name,
                     security_group_ids=sglist,
                     instance_type=app['type'],
                     subnet_id=vpc_subnetids[subnetidx],
@@ -1373,8 +1378,16 @@ for app in conf['apps']:
                 print "APP-LAUNCH %s type %s != %s" % (lc.name, lc.instance_type, app['type'])
                 lc = None
                 break
-            elif lc.key_name != app['keypair']:
+            elif 'keypair' not in app and lc.key_name != None:
+                print "APP-LAUNCH %s key %s != None" % (lc.name, lc.key_name)
+                lc = None
+                break
+            elif 'keypair' in app and lc.key_name != app['keypair']:
                 print "APP-LAUNCH %s key %s != %s" % (lc.name, lc.key_name, app['keypair'])
+                lc = None
+                break
+            elif 'keypair' in app and lc.key_name == None:
+                print "APP-LAUNCH %s key None != %s" % (lc.name, app['keypair'])
                 lc = None
                 break
             elif lc.instance_profile_name != app['role']:
@@ -1418,12 +1431,17 @@ for app in conf['apps']:
                         ephemeral_name="ephemeral%d" % b)
                     if verbose:
                         print "APP-INST block device mapping %s to %s" % (mapping[devname].ephemeral_name, devname)
+            key_name = None
+            if 'keypair' in app:
+                key_name = app['keypair']
+            else:
+                print "WARNING: Staring %s without a keypair!!!" % ( app['name'] )
 
             lckwargs = {
                 "name": asgnamefull,
                 "security_groups": sglist,
                 "image_id": app['ami'],
-                "key_name": app['keypair'],
+                "key_name": key_name,
                 "instance_type": app['type'],
                 "instance_profile_name": app['role'],
                 "block_device_mappings": [mapping],
