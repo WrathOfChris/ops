@@ -195,6 +195,8 @@ def elb_wait_registered(inst):
     if healthycnt == len(lbs):
       healthy = True
 
+    print "Healthy nodes [%d / %d]" % (healthycnt, len(lbs))
+    sys.stdout.flush()
     # sleep a few
     if healthy != True:
       time.sleep(args.sleep)
