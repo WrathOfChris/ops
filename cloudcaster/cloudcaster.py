@@ -566,36 +566,35 @@ for app in conf['apps']:
                                                          rule.to_port)
 
     # APP:APP rules
-    if app['ports'] == None:
-        print "{} does not have ports?".format(app['name'])
-    for port in app['ports']:
-        p_from = port['from']
-        p_to = port['to']
-        p_prot = port['prot']
-        if p_prot == 'all':
-            p_prot = -1
-        elif p_prot != 'udp' and p_prot != 'icmp':
-            p_prot = 'tcp'
+    if 'ports' in app:
+        for port in app['ports']:
+            p_from = port['from']
+            p_to = port['to']
+            p_prot = port['prot']
+            if p_prot == 'all':
+                p_prot = -1
+            elif p_prot != 'udp' and p_prot != 'icmp':
+                p_prot = 'tcp'
 
-        # Internal service rule
-        rule = find_sg_rule_group(
-            sg.id, sg.owner_id, p_from, p_to, p_prot, sg.rules)
-        if rule == None:
-            print "Creating SG rule for SG -> SG (%s, %s, %s)" % (p_from, p_to, p_prot)
-            if awsec2.authorize_security_group(group_id=sg.id,
-                                               src_security_group_group_id=sg.id,
-                                               ip_protocol=p_prot,
-                                               from_port=p_from,
-                                               to_port=p_to
-                                               ) != True:
-                print "Failed authorizing SG->SG"
-                sys.exit(1)
-            sgs = awsec2.get_all_security_groups(filters=vpcfilter)
-            sg = find_sg(app['group'], sgs)
+            # Internal service rule
             rule = find_sg_rule_group(
                 sg.id, sg.owner_id, p_from, p_to, p_prot, sg.rules)
-        if verbose:
-            print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
+            if rule == None:
+                print "Creating SG rule for SG -> SG (%s, %s, %s)" % (p_from, p_to, p_prot)
+                if awsec2.authorize_security_group(group_id=sg.id,
+                                                   src_security_group_group_id=sg.id,
+                                                   ip_protocol=p_prot,
+                                                   from_port=p_from,
+                                                   to_port=p_to
+                                                   ) != True:
+                    print "Failed authorizing SG->SG"
+                    sys.exit(1)
+                sgs = awsec2.get_all_security_groups(filters=vpcfilter)
+                sg = find_sg(app['group'], sgs)
+                rule = find_sg_rule_group(
+                    sg.id, sg.owner_id, p_from, p_to, p_prot, sg.rules)
+            if verbose:
+                print "SGRULE %s src %s %s %s:%s" % (sg.name, rule.grants, rule.ip_protocol, rule.from_port, rule.to_port)
 
 # default for egress rules is to deny
 # This means dropping the default rule - should we reinstate it if it's
