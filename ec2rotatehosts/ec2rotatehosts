@@ -39,13 +39,13 @@ import time
 from pprint import pprint
 
 if 'AWS_ACCESS_KEY' in os.environ:
-  aws_key = os.environ['AWS_ACCESS_KEY']
+    aws_key = os.environ['AWS_ACCESS_KEY']
 else:
-  aws_key = None
+    aws_key = None
 if 'AWS_SECRET_KEY' in os.environ:
-  aws_secret = os.environ['AWS_SECRET_KEY']
+    aws_secret = os.environ['AWS_SECRET_KEY']
 else:
-  aws_secret = None
+    aws_secret = None
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
@@ -53,29 +53,32 @@ parser.add_argument("-r", "--region", help="ec2 region")
 parser.add_argument("-c", "--count", help="concurrent rotations", default=1)
 parser.add_argument("-s", "--sleep", help="wait sleep", default=5)
 parser.add_argument("-n", "--num", help="number of hosts to rotate, 0 = all",
-        type=int, default=0)
+                    type=int, default=0)
 parser.add_argument("-i", "--instance", help="specific instance to rotate")
 parser.add_argument("group", help="autoscale group to rotoate")
 args = parser.parse_args()
 if args.group == None:
-  parser.print_help()
-  sys.exit(1)
+    parser.print_help()
+    sys.exit(1)
 
 if args.region == None:
-  args.region = 'us-east-1'
+    args.region = 'us-east-1'
 
 verbose = args.verbose
-awsec2 = boto.ec2.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
-awselb = boto.ec2.elb.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
-awsasg = boto.ec2.autoscale.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
+awsec2 = boto.ec2.connect_to_region(
+    args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
+awselb = boto.ec2.elb.connect_to_region(
+    args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
+awsasg = boto.ec2.autoscale.connect_to_region(
+    args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 
 oldinst = []
 newinst = []
 azcount = {}
 
 if verbose:
-  print "%s rotating autoscale group in %s with count %i" % (args.group, args.region, args.count)
-  sys.stdout.flush()
+    print "%s rotating autoscale group in %s with count %i" % (args.group, args.region, args.count)
+    sys.stdout.flush()
 
 all_groups = awsasg.get_all_groups([args.group])
 if len(all_groups) == 0:
@@ -88,7 +91,7 @@ capacity = asg.desired_capacity
 
 # start count of AZ instances
 for az in asg.availability_zones:
-  azcount[str(az)] = 0
+    azcount[str(az)] = 0
 
 # store original instance list
 for i in asg.instances:
@@ -105,14 +108,14 @@ if len(oldinst) == 0:
 if verbose:
     if args.num > 0:
         print "%s rotating %i/%i instances" % (args.group, args.num,
-                len(oldinst))
+                                               len(oldinst))
     else:
         print "%s rotating %i instances" % (args.group, len(oldinst))
     sys.stdout.flush()
 
 lbs = []
 if asg.load_balancers:
-  lbs = awselb.get_all_load_balancers(asg.load_balancers)
+    lbs = awselb.get_all_load_balancers(asg.load_balancers)
 
 #
 # Warn of dangerous things for ops people
@@ -120,89 +123,94 @@ if asg.load_balancers:
 
 # check for reduced redundancy in each zone, warn if AZ will empty
 for azname, count in azcount.items():
-  if count > 0 and count <= args.count and \
-          asg.max_size <= asg.desired_capacity:
-    print "WARNING: rotation will temporarily reduce redundancy in zone %s" % azname
-    sys.stdout.flush()
+    if count > 0 and count <= args.count and \
+            asg.max_size <= asg.desired_capacity:
+        print "WARNING: rotation will temporarily reduce redundancy in zone %s" % azname
+        sys.stdout.flush()
 
 if len(oldinst) < 2 and asg.max_size <= asg.desired_capacity:
-  print "WARNING: single autoscale instance, using accelerated rotation"
-  sys.stdout.flush()
+    print "WARNING: single autoscale instance, using accelerated rotation"
+    sys.stdout.flush()
 
 # check cross-zone load balancing - warn if empty AZ will deadend requests
 for lb in lbs:
-  if lb.is_cross_zone_load_balancing() != True:
-    for azname, count in azcount.items():
-      if count > 0 and count <= 1:
-        print "WARNING: rotation will cause user-facing outages in zone %s" % azname
+    if lb.is_cross_zone_load_balancing() != True:
+        for azname, count in azcount.items():
+            if count > 0 and count <= 1:
+                print "WARNING: rotation will cause user-facing outages in zone %s" % azname
 
 #
 # Wait for all instances to register as healthy
 #
+
+
 def elb_wait_healthy(inst=None):
-  global asg
+    global asg
 
-  if verbose:
-    print "%s verifying all ELB instances healthy" % asg.name
-    sys.stdout.flush()
-  healthy = False
-  while not healthy:
-    healthycnt = 0
-    healthyneed = 0
-    lbs = []
-    if asg.load_balancers:
-      lbs = awselb.get_all_load_balancers(asg.load_balancers)
-    for lb in lbs:
-      healths = awselb.describe_instance_health(lb.name)
-      healthyneed += len(healths)
-      for h in healths:
-          if h.state == u'InService':
-              healthycnt += 1
-          elif inst and str(h.instance_id) == str(inst):
-              # old instance does not count, call it healthy
-              healthycnt += 1
-    if healthycnt == healthyneed:
-      healthy = True
+    if verbose:
+        print "%s verifying all ELB instances healthy" % asg.name
+        sys.stdout.flush()
+    healthy = False
+    while not healthy:
+        healthycnt = 0
+        healthyneed = 0
+        lbs = []
+        if asg.load_balancers:
+            lbs = awselb.get_all_load_balancers(asg.load_balancers)
+        for lb in lbs:
+            healths = awselb.describe_instance_health(lb.name)
+            healthyneed += len(healths)
+            for h in healths:
+                if h.state == u'InService':
+                    healthycnt += 1
+                elif inst and str(h.instance_id) == str(inst):
+                    # old instance does not count, call it healthy
+                    healthycnt += 1
+        if healthycnt == healthyneed:
+            healthy = True
 
-    # sleep a few
-    if healthy != True:
-      time.sleep(args.sleep)
+        # sleep a few
+        if healthy != True:
+            time.sleep(args.sleep)
 
-  return
+    return
 
 #
 # Wait for instance to register to ELB
 #
+
+
 def elb_wait_registered(inst):
-  global asg
+    global asg
 
-  if verbose:
-    print "%s %s waiting for ELB registration" % (args.group, inst)
-    sys.stdout.flush()
-  healthy = False
-  while not healthy:
-    healthycnt = 0
-    lbs = []
-    if asg.load_balancers:
-      lbs = awselb.get_all_load_balancers(asg.load_balancers)
-    for lb in lbs:
-      healths = awselb.describe_instance_health(lb.name, [inst])
-      for h in healths:
-        if h.state == u'InService':
-          healthycnt += 1
-    if healthycnt == len(lbs):
-      healthy = True
+    if verbose:
+        print "%s %s waiting for ELB registration" % (args.group, inst)
+        sys.stdout.flush()
+    healthy = False
+    while not healthy:
+        healthycnt = 0
+        lbs = []
+        if asg.load_balancers:
+            lbs = awselb.get_all_load_balancers(asg.load_balancers)
+        for lb in lbs:
+            healths = awselb.describe_instance_health(lb.name, [inst])
+            for h in healths:
+                if h.state == u'InService':
+                    healthycnt += 1
+        if healthycnt == len(lbs):
+            healthy = True
 
-    print "Healthy nodes [%d / %d]" % (healthycnt, len(lbs))
-    sys.stdout.flush()
-    # sleep a few
-    if healthy != True:
-      time.sleep(args.sleep)
+        print "Healthy nodes [%d / %d]" % (healthycnt, len(lbs))
+        sys.stdout.flush()
+        # sleep a few
+        if healthy != True:
+            time.sleep(args.sleep)
 
-  return
+    return
+
 
 def asg_remove_instance(instance, elbwait=True, decrement=False):
-    # remove instance from ELB
+        # remove instance from ELB
     elbsleep = 0
     for lb in lbs:
         if verbose:
@@ -210,13 +218,13 @@ def asg_remove_instance(instance, elbwait=True, decrement=False):
             sys.stdout.flush()
         awselb.deregister_instances(lb.name, instance)
         elbsleep = max(elbsleep,
-                lb.health_check.interval * lb.health_check.healthy_threshold)
+                       lb.health_check.interval * lb.health_check.healthy_threshold)
 
     # only sleep if this is a controlled rotation
     if elbwait:
         if verbose:
             print "%s %s waiting %d seconds for ELB deregistration" % (
-                    args.group, instance, elbsleep)
+                args.group, instance, elbsleep)
             sys.stdout.flush()
         time.sleep(elbsleep)
 
@@ -238,124 +246,125 @@ if asg.max_size > asg.desired_capacity:
 
 instrotate = 0
 for thisinst in oldinst:
-  thisnewinst = None
-  elasticip = None
-  internalip = None
-  internaleni = None
+    thisnewinst = None
+    elasticip = None
+    internalip = None
+    internaleni = None
 
-  if args.num > 0 and instrotate >= args.num:
-      print "%s finished rotating requested %d/%d instances" % (args.group,
-              args.num, len(oldinst))
-      sys.exit(0)
-  instrotate += 1
+    if args.num > 0 and instrotate >= args.num:
+        print "%s finished rotating requested %d/%d instances" % (args.group,
+                                                                  args.num, len(oldinst))
+        sys.exit(0)
+    instrotate += 1
 
-  # Determine if ElasticIP is in use, and save it for the new instance
-  addrinsts = awsec2.get_only_instances(thisinst)
-  for i in addrinsts:
-      for ni in i.interfaces:
-          # ElasticIPs are owned by account number, standard by 'amazon'
-          if hasattr(ni, 'ipOwnerId') and str(ni.ipOwnerId) != 'amazon':
-              addrs = awsec2.get_all_addresses(ni.publicIp)
-              if len(addrs) > 0:
-                  elasticip = addrs[0]
-                  break
-      if elasticip:
-          break
+    # Determine if ElasticIP is in use, and save it for the new instance
+    addrinsts = awsec2.get_only_instances(thisinst)
+    for i in addrinsts:
+        for ni in i.interfaces:
+                    # ElasticIPs are owned by account number, standard by
+                    # 'amazon'
+            if hasattr(ni, 'ipOwnerId') and str(ni.ipOwnerId) != 'amazon':
+                addrs = awsec2.get_all_addresses(ni.publicIp)
+                if len(addrs) > 0:
+                    elasticip = addrs[0]
+                    break
+        if elasticip:
+            break
 
-  # Determine if Secondary IP is in use, and save for new instance
-  for i in addrinsts:
-      for ni in i.interfaces:
-          if len(ni.private_ip_addresses) > 1:
-              internalip = ni.private_ip_addresses[1].private_ip_address
-              internaleni = ni.id
-              break
+    # Determine if Secondary IP is in use, and save for new instance
+    for i in addrinsts:
+        for ni in i.interfaces:
+            if len(ni.private_ip_addresses) > 1:
+                internalip = ni.private_ip_addresses[1].private_ip_address
+                internaleni = ni.id
+                break
 
-  if not verbose:
-    # first part of rotating i-xxxxxx -> i-xxxxxx
-    print "%s rotating %s ->" % (args.group, thisinst),
-    sys.stdout.flush()
+    if not verbose:
+        # first part of rotating i-xxxxxx -> i-xxxxxx
+        print "%s rotating %s ->" % (args.group, thisinst),
+        sys.stdout.flush()
 
-  # only sleep if this is a controlled rotation
-  elbwait = True
-  if len(oldinst) > 1:
-      elbwait = False
+    # only sleep if this is a controlled rotation
+    elbwait = True
+    if len(oldinst) > 1:
+        elbwait = False
 
-  if elasticip:
-      if verbose:
-          print "%s %s disassociating ElasticIP %s" % (args.group, thisinst,
-                  elasticip.public_ip)
-          sys.stdout.flush()
-      elasticip.disassociate()
-
-  if internalip:
-      if verbose:
-          print "%s %s disassociating Secondary IP %s" % (args.group, thisinst,
-                  internalip)
-          sys.stdout.flush()
-      awsec2.unassign_private_ip_addresses(
-              network_interface_id=internaleni,
-              private_ip_addresses=internalip)
-
-  if startfirst:
-      asg = awsasg.get_all_groups([args.group])[0]
-      asg.desired_capacity += 1
-      asg.update()
-  else:
-      asg_remove_instance(thisinst, elbwait, False)
-
-  # wait for ASG to start new instance
-  if verbose:
-    print "%s waiting for autoscale instance" % args.group
-    sys.stdout.flush()
-  healthy = False
-  while not healthy:
-    healthycnt = 0
-    asg = awsasg.get_all_groups([args.group])[0]
-    for i in asg.instances:
-      if i.lifecycle_state == u'InService':
-        healthycnt += 1
-      if i.instance_id not in oldinst and i.instance_id not in newinst:
-        newinst.append(i.instance_id)
-        thisnewinst = i.instance_id
+    if elasticip:
         if verbose:
-          print "%s %s is %s" % (args.group, i.instance_id, str(i.lifecycle_state))
-          sys.stdout.flush()
-        else:
-          # second part of rotating i-xxxxxx -> i-xxxxxx
-          print "%s" % i.instance_id
-          sys.stdout.flush()
-    if healthycnt >= asg.desired_capacity:
-      healthy = True
+            print "%s %s disassociating ElasticIP %s" % (args.group, thisinst,
+                                                         elasticip.public_ip)
+            sys.stdout.flush()
+        elasticip.disassociate()
 
-    # sleep a few
-    if healthy != True:
-      time.sleep(args.sleep)
+    if internalip:
+        if verbose:
+            print "%s %s disassociating Secondary IP %s" % (args.group, thisinst,
+                                                            internalip)
+            sys.stdout.flush()
+        awsec2.unassign_private_ip_addresses(
+            network_interface_id=internaleni,
+            private_ip_addresses=internalip)
 
-  if elasticip:
-      if verbose:
-          print "%s %s associating ElasticIP %s" % (args.group, thisnewinst,
-                  elasticip.public_ip)
-          sys.stdout.flush()
-      elasticip.associate(thisnewinst, allow_reassociation=True)
+    if startfirst:
+        asg = awsasg.get_all_groups([args.group])[0]
+        asg.desired_capacity += 1
+        asg.update()
+    else:
+        asg_remove_instance(thisinst, elbwait, False)
 
-  if internalip:
-      if verbose:
-          print "%s %s associating Secondary IP %s" % (args.group, thisnewinst,
-                  internalip)
-          sys.stdout.flush()
-      internaleni = None
-      for i in awsec2.get_only_instances(thisnewinst):
-          internaleni = i.interfaces[0].id
-      awsec2.assign_private_ip_addresses(
-              network_interface_id=internaleni,
-              private_ip_addresses=internalip,
-              allow_reassignment=False)
+    # wait for ASG to start new instance
+    if verbose:
+        print "%s waiting for autoscale instance" % args.group
+        sys.stdout.flush()
+    healthy = False
+    while not healthy:
+        healthycnt = 0
+        asg = awsasg.get_all_groups([args.group])[0]
+        for i in asg.instances:
+            if i.lifecycle_state == u'InService':
+                healthycnt += 1
+            if i.instance_id not in oldinst and i.instance_id not in newinst:
+                newinst.append(i.instance_id)
+                thisnewinst = i.instance_id
+                if verbose:
+                    print "%s %s is %s" % (args.group, i.instance_id, str(i.lifecycle_state))
+                    sys.stdout.flush()
+                else:
+                    # second part of rotating i-xxxxxx -> i-xxxxxx
+                    print "%s" % i.instance_id
+                    sys.stdout.flush()
+        if healthycnt >= asg.desired_capacity:
+            healthy = True
 
-  # wait for new instance to register to the ELB
-  elb_wait_registered(thisnewinst)
+        # sleep a few
+        if healthy != True:
+            time.sleep(args.sleep)
 
-  # wait for all instances in the autoscale group to register healthy
-  elb_wait_healthy(thisinst)
+    if elasticip:
+        if verbose:
+            print "%s %s associating ElasticIP %s" % (args.group, thisnewinst,
+                                                      elasticip.public_ip)
+            sys.stdout.flush()
+        elasticip.associate(thisnewinst, allow_reassociation=True)
 
-  if startfirst:
-      asg_remove_instance(thisinst, elbwait, True)
+    if internalip:
+        if verbose:
+            print "%s %s associating Secondary IP %s" % (args.group, thisnewinst,
+                                                         internalip)
+            sys.stdout.flush()
+        internaleni = None
+        for i in awsec2.get_only_instances(thisnewinst):
+            internaleni = i.interfaces[0].id
+        awsec2.assign_private_ip_addresses(
+            network_interface_id=internaleni,
+            private_ip_addresses=internalip,
+            allow_reassignment=False)
+
+    # wait for new instance to register to the ELB
+    elb_wait_registered(thisnewinst)
+
+    # wait for all instances in the autoscale group to register healthy
+    elb_wait_healthy(thisinst)
+
+    if startfirst:
+        asg_remove_instance(thisinst, elbwait, True)
