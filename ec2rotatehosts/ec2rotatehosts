@@ -48,6 +48,7 @@ else:
     aws_secret = None
 
 parser = argparse.ArgumentParser()
+parser.add_argument("-v", "--verbose", help="verbosity", action="store_true")
 parser.add_argument("-r", "--region", help="ec2 region")
 parser.add_argument("-c", "--count", help="concurrent rotations", default=1)
 parser.add_argument("-s", "--sleep", help="wait sleep", default=5)
@@ -112,6 +113,9 @@ sys.stdout.flush()
 lbs = []
 if asg.load_balancers:
     lbs = awselb.get_all_load_balancers(asg.load_balancers)
+for lb in lbs:
+    print "%s elb %s" % (args.group, lb.name)
+sys.stdout.flush()
 
 #
 # Warn of dangerous things for ops people
@@ -166,6 +170,13 @@ def elb_wait_healthy(inst=None):
 
         # sleep a few
         if healthy != True:
+            if args.verbose:
+                print "%s sleeping %d seconds for %d/%d ELB InService" % (
+                        asg.name,
+                        args.sleep,
+                        healthycnt,
+                        healthyneed)
+                sys.stdout.flush()
             time.sleep(args.sleep)
 
     return
@@ -194,14 +205,19 @@ def elb_wait_registered(inst):
         if healthycnt == len(lbs):
             healthy = True
 
-        print "Healthy nodes [%d / %d]" % (healthycnt, len(lbs))
-        sys.stdout.flush()
         # sleep a few
         if healthy != True:
+            if args.verbose:
+                print "%s %s sleeping %d seconds for %d/%d ELB InService" % (
+                        args.group,
+                        inst,
+                        args.sleep,
+                        healthycnt,
+                        len(lbs))
+                sys.stdout.flush()
             time.sleep(args.sleep)
 
     return
-
 
 def asg_remove_instance(instance, elbwait=True, decrement=False):
         # remove instance from ELB
@@ -300,6 +316,7 @@ for thisinst in oldinst:
     print "%s waiting for autoscale instance" % args.group
     sys.stdout.flush()
     healthy = False
+    waitfor = 'Pending'
     while not healthy:
         healthycnt = 0
         asg = awsasg.get_all_groups([args.group])[0]
@@ -311,11 +328,20 @@ for thisinst in oldinst:
                 thisnewinst = i.instance_id
                 print "%s %s is %s" % (args.group, i.instance_id, str(i.lifecycle_state))
                 sys.stdout.flush()
+                waitfor = 'InService'
         if healthycnt >= asg.desired_capacity:
             healthy = True
 
         # sleep a few
         if healthy != True:
+            if args.verbose:
+                print "%s sleeping %d seconds for %d/%d autoscale %s" % (
+                        args.group,
+                        args.sleep,
+                        healthycnt,
+                        asg.desired_capacity,
+                        waitfor)
+                sys.stdout.flush()
             time.sleep(args.sleep)
 
     if elasticip:
