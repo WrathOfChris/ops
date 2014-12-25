@@ -56,6 +56,7 @@ parser.add_argument("-a", "--ami", help="ami ID")
 parser.add_argument("-e", "--environ", help="environment tag")
 parser.add_argument("-s", "--service", help="service tag")
 parser.add_argument("-n", "--name", help="ami name")
+parser.add_argument("-x", "--resize", help="resize root volume on boot, integer in gigabytes")
 parser.add_argument("group", help="autoscale group to update")
 args = parser.parse_args()
 if args.group == None:
@@ -238,33 +239,46 @@ if lc != None and lc.image_id != ami.id:
   if lc.instance_monitoring.enabled == u'true':
     instmon = True
 
-  #
-  # Existing LaunchConfig returns a list of BlockDeviceMapping()
-  # Creating LaunchConfig requires a list with a single BlockDeviceMapping(),
-  # which is a dict of BlockDeviceType()
-  #
-  mapping = None
-  if len(lc.block_device_mappings) > 0:
-    mapping = boto.ec2.blockdevicemapping.BlockDeviceMapping()
-    for bdm in lc.block_device_mappings:
-      # because, unicode
-      devname = str(bdm.device_name)
+  if args.resize == None:
+    #
+    # Existing LaunchConfig returns a list of BlockDeviceMapping()
+    # Creating LaunchConfig requires a list with a single BlockDeviceMapping(),
+    # which is a dict of BlockDeviceType()
+    #
+    mapping = None
+    if len(lc.block_device_mappings) > 0:
+      mapping = boto.ec2.blockdevicemapping.BlockDeviceMapping()
+      for bdm in lc.block_device_mappings:
+        # because, unicode
+        devname = str(bdm.device_name)
 
-      if bdm.ebs:
-        print "EBS: %s/%s" % (str(bdm.ebs.volume_size), str(bdm.ebs.snapshot_id))
-        deleteontermination = True
-        try:
-          if bdm.ebs.deleteontermination and bdm.ebs.deleteontermination == u'false':
-            deleteontermination = False
-        except AttributeError:
+        if bdm.ebs:
+          print "EBS: %s/%s" % (str(bdm.ebs.volume_size), str(bdm.ebs.snapshot_id))
           deleteontermination = True
-        mapping[devname] = boto.ec2.blockdevicemapping.BlockDeviceType(snapshot_id=bdm.ebs.snapshot_id, size=bdm.ebs.volume_size, delete_on_termination=deleteontermination)
-      else:
-        mapping[devname] = boto.ec2.blockdevicemapping.BlockDeviceType(ephemeral_name=bdm.virtual_name)
-    
-  maplist = None
-  if mapping and len(mapping) > 0:
-    maplist = [mapping]
+          try:
+            if bdm.ebs.deleteontermination and bdm.ebs.deleteontermination == u'false':
+              deleteontermination = False
+          except AttributeError:
+            deleteontermination = True
+          mapping[devname] = boto.ec2.blockdevicemapping.BlockDeviceType(snapshot_id=bdm.ebs.snapshot_id, size=bdm.ebs.volume_size, delete_on_termination=deleteontermination)
+        else:
+          mapping[devname] = boto.ec2.blockdevicemapping.BlockDeviceType(ephemeral_name=bdm.virtual_name)
+
+    maplist = None
+    if mapping and len(mapping) > 0:
+      maplist = [mapping]
+  else:
+    # Support resizing the root volume
+    # Once you do this however, ec2autoimage will keep resusing the new size.
+    # Feature, or?
+    bdm = boto.ec2.blockdevicemapping.BlockDeviceMapping()
+    dev_sda1 = boto.ec2.blockdevicemapping.BlockDeviceType()
+    dev_sda1.size=args.resize
+    dev_sda1.volume_type='gp2'
+    dev_sda1.delete_on_termination='true'
+    bdm["/dev/sda1"] = dev_sda1
+    maplist = [bdm]
+
   newlc = boto.ec2.autoscale.LaunchConfiguration(
       name = lcnamefull,
       image_id = ami.id,
