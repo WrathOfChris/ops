@@ -57,6 +57,7 @@ parser.add_argument("-e", "--environ", help="environment tag")
 parser.add_argument("-s", "--service", help="service tag")
 parser.add_argument("-n", "--name", help="ami name")
 parser.add_argument("-x", "--resize", help="resize root volume on boot, integer in gigabytes")
+parser.add_argument("-f", "--force", help="Force LC updating", action="store_true")
 parser.add_argument("group", help="autoscale group to update")
 args = parser.parse_args()
 if args.group == None:
@@ -71,6 +72,7 @@ if args.service == None and args.name == None and args.ami == None:
   sys.exit(1)
 
 verbose = args.verbose
+force = args.force
 awsec2 = boto.ec2.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 awselb = boto.ec2.elb.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
 awsasg = boto.ec2.autoscale.connect_to_region(args.region, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
@@ -160,7 +162,10 @@ if verbose:
 # Autoscale Group
 #
 
-asgupdate = False
+if force == True:
+    asgupdate = True
+else:
+    asgupdate = False
 
 asgroups = awsasg.get_all_groups(names=[args.group])
 if len(asgroups) < 1:
@@ -204,7 +209,7 @@ lcconfigs = awsasg.get_all_launch_configurations(names=[asg.launch_config_name])
 if len(lcconfigs) > 0:
   lc = lcconfigs[0]
 
-if lc == None or lc.image_id != ami.id:
+if lc == None or lc.image_id != ami.id or force == True:
   asgupdate = True
   if verbose:
     print "active launch config %s ami != %s" % (asg.launch_config_name, ami.id)
