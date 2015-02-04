@@ -219,7 +219,7 @@ if lc == None or lc.image_id != ami.id or force == True:
   if newlc:
     lc = newlc
 
-if lc != None and lc.image_id != ami.id:
+if lc != None and lc.image_id != ami.id or force:
   asgupdate = True
   if verbose:
     print "launch config %s ami %s != %s" % (lc.name, lc.image_id, ami.id)
