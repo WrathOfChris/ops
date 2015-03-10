@@ -118,6 +118,16 @@ bdmapping['m3.xlarge'] = 2
 bdmapping['t2.micro'] = 0
 bdmapping['t2.small'] = 0
 bdmapping['t2.medium'] = 0
+bdmapping['c4.large'] = 0
+bdmapping['c4.xlarge'] = 0
+bdmapping['c4.2xlarge'] = 0
+bdmapping['c4.4xlarge'] = 0
+bdmapping['c4.8xlarge'] = 0
+bdmapping['r3.large'] = 1
+bdmapping['r3.xlarge'] = 1
+bdmapping['r3.2xlarge'] = 1
+bdmapping['r3.4xlarge'] = 1
+bdmapping['r3.8xlarge'] = 2
 
 def find_vpc(cidr, vpcs):
   for v in vpcs:
