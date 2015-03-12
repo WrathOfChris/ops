@@ -942,7 +942,8 @@ for confelb in conf['elbs']:
         else:
             conf_idle_timeout = None
 
-        if conf_idle_timeout != None and elb_attr.connecting_settings.idle_timeout != conf_idle_timeout and elb_attr.connecting_settings.idle_timeout == 60:
+        if (conf_idle_timeout != None and \
+                elb_attr.connecting_settings.idle_timeout != conf_idle_timeout):
             print "Idle timeout on %s not set to %s" % (elb.name, conf_idle_timeout)
             elb_attr = boto.ec2.elb.attributes.ConnectionSettingAttribute(
                 myname
@@ -952,6 +953,10 @@ for confelb in conf['elbs']:
             if not elb.connection.modify_lb_attribute(myname, attr, elb_attr):
                 print "Failed modifying ELB settings %s" % myname
                 sys.exit(1)
+        elif (conf_idle_timeout == None and \
+                elb_attr.connecting_settings.idle_timeout == 60):
+            # default is 60
+            pass
         else:
             print "WARNING: %s timeout set to %s, and config says %s!!!!!!!" % (elb.name, elb_attr.connecting_settings.idle_timeout, conf_idle_timeout)
 
