@@ -1397,7 +1397,7 @@ for app in conf['apps']:
                 print "APP-LAUNCH %s type %s != %s" % (lc.name, lc.instance_type, app['type'])
                 lc = None
                 break
-            elif 'keypair' not in app and lc.key_name != None:
+            elif 'keypair' not in app and lc.key_name != '':
                 print "APP-LAUNCH %s key %s != None" % (lc.name, lc.key_name)
                 lc = None
                 break
