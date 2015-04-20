@@ -913,6 +913,12 @@ elbs = awselb.get_all_load_balancers()
 
 for confelb in conf['elbs']:
 
+    # Amazon sets hard limit of 32 chars on ELB names
+    # This needs to exit to prevent harder to discern errors later
+    if len(confelb['name']) > 32:
+        print "ERROR: ELB name \"%s\" longer than maximum 32 chars"
+        sys.exit(1)
+
     # Load certificate ARN
     elb_listeners_full = []
     for elb_listener in confelb['listeners']:
