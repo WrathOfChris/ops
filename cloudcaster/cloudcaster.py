@@ -228,7 +228,9 @@ else:
                     print "CREATED VPC ACL:"
                     pprint(todo_acl)
     if 'name' in conf['vpc']:
-        vpc.add_tag("Name", conf['vpc']['name'])
+        if vpc.tags['Name'] != conf['vpc']['name']:
+            vpc.add_tag("Name", conf['vpc']['name'])
+            print "ADD NAME TAG {} to VPC {}".format(conf['vpc']['name'], conf['vpc']['cidr'])
         if verbose:
             print "ADD NAME TAG {} to VPC {}".format(conf['vpc']['name'], conf['vpc']['cidr'])
 
@@ -290,6 +292,11 @@ if 'subnets' in conf['vpc']:
             if net == None:
                 print "Failed creating VPC subnet %s" % n
                 sys.exit(1)
+        if 'name' in conf['vpc']:
+            _tag_name = "%s-private" % conf['vpc']['name']
+            if net.tags['Name'] != _tag_name:
+                net.add_tag("Name", _tag_name)
+                print "Added tag to %s" % net
         if verbose:
             print "VPC-SUBNET %s %s PRIVATE" % (net.id, net.cidr_block)
 
@@ -304,6 +311,11 @@ for n in conf['vpc']['pubsubnets']:
         if net == None:
             print "Failed creating VPC subnet %s" % n
             sys.exit(1)
+    if 'name' in conf['vpc']:
+        _tag_name = "%s-public" % conf['vpc']['name']
+        if net.tags['Name'] != _tag_name:
+            net.add_tag("Name", _tag_name)
+            print "Added tag to %s" % net
     if verbose:
         print "VPC-SUBNET %s %s PUBLIC" % (net.id, net.cidr_block)
 
