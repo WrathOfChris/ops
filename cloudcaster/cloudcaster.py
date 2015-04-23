@@ -228,7 +228,10 @@ else:
                     print "CREATED VPC ACL:"
                     pprint(todo_acl)
     if 'name' in conf['vpc']:
-        if vpc.tags['Name'] != conf['vpc']['name']:
+        if 'Name' not in vpc.tags:
+            vpc.add_tag("Name", conf['vpc']['name'])
+            print "ADD NAME TAG {} to VPC {}".format(conf['vpc']['name'], conf['vpc']['cidr'])
+        elif vpc.tags['Name'] != conf['vpc']['name']:
             vpc.add_tag("Name", conf['vpc']['name'])
             print "ADD NAME TAG {} to VPC {}".format(conf['vpc']['name'], conf['vpc']['cidr'])
         if verbose:
@@ -294,7 +297,10 @@ if 'subnets' in conf['vpc']:
                 sys.exit(1)
         if 'name' in conf['vpc']:
             _tag_name = "%s-private" % conf['vpc']['name']
-            if net.tags['Name'] != _tag_name:
+            if 'Name' not in net.tags:
+                net.add_tag("Name", _tag_name)
+                print "Added tag to %s" % net
+            elif net.tags['Name'] != _tag_name:
                 net.add_tag("Name", _tag_name)
                 print "Added tag to %s" % net
         if verbose:
@@ -313,7 +319,10 @@ for n in conf['vpc']['pubsubnets']:
             sys.exit(1)
     if 'name' in conf['vpc']:
         _tag_name = "%s-public" % conf['vpc']['name']
-        if net.tags['Name'] != _tag_name:
+        if 'Name' not in net.tags:
+            net.add_tag("Name", _tag_name)
+            print "Added tag to %s" % net
+        elif net.tags['Name'] != _tag_name:
             net.add_tag("Name", _tag_name)
             print "Added tag to %s" % net
     if verbose:
