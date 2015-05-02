@@ -2098,7 +2098,6 @@ if route == None:
                                     instance_id=nat_instances[0])
     if route == None:
         print "Missing MAIN route for 0.0.0.0/0 -> NAT"
-        sys.exit(1)
 else:
     if 'nat' in conf:
         if str(route.instance_id) != nat_instances[0]:
@@ -2138,7 +2137,6 @@ if route == None:
                                     instance_id=nat_instances[0])
     if route == None:
         print "Missing PUBLIC route for %s -> NAT/VPN" % conf['aws']['privnet']
-        sys.exit(1)
 else:
     if 'nat' in conf:
         if str(route.instance_id) != nat_instances[0]:
