@@ -65,6 +65,9 @@ if 'AWS_SECRET_KEY' in os.environ:
 else:
     aws_secret = None
 
+# STS does not exist in all regions, but is global
+STS_REGION = 'us-east-1'
+
 vpc_subnetids = []
 vpc_pubsubnetids = []
 nat_subnetidx = 0
@@ -2149,7 +2152,7 @@ else:
 #
 if 'r53xacct' in conf['aws']:
     sts = boto.sts.connect_to_region(
-        conf['aws']['region'], aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
+        STS_REGION, aws_access_key_id=aws_key, aws_secret_access_key=aws_secret)
     tok = sts.assume_role(conf['aws']['r53xacct'], 'cloudcaster')
     awsr53 = boto.connect_route53(
         aws_access_key_id=tok.credentials.access_key,
