@@ -264,13 +264,16 @@ for app in conf['apps']:
   role = None
   if 'role' in app:
     role = app['role']
+  keypair = None
+  if 'keypair' in app:
+    keypair = app['keypair']
 
   print "Creating Launch Config %s" % asgnamefull
   lc = boto.ec2.autoscale.LaunchConfiguration(
       name = asgnamefull,
       security_groups = sglist,
       image_id = app['ami'],
-      key_name = app['keypair'],
+      key_name = keypair,
       instance_type = app['type'],
       instance_profile_name = role,
       block_device_mappings = [mapping],
